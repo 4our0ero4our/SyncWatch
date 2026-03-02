@@ -16,7 +16,7 @@ import { SearchIcon } from "@/src/assets/svgs";
 import MovieModal from "@/src/components/Modal";
 import Input from "@/src/components/common/Input";
 import { MovieProps } from "../homePage/CreateParty/types";
-import { fetchPopularMovies, fetchSearchMovies, isMovieOnProvider } from "@/src/services/tmdb";
+import { fetchPopularMoviesForProvider, fetchSearchMovies, isMovieOnProvider } from "@/src/services/tmdb";
 import { createRoom } from "@/src/services/rooms";
 import { Details, Form, Success } from "./CreateParty";
 import Typography from "@/src/components/common/Typography";
@@ -50,7 +50,9 @@ function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchPopularMovies()
+    setLoading(true);
+    setError(null);
+    fetchPopularMoviesForProvider(user?.streamingProvider)
       .then((list) => {
         if (!cancelled) setMovies(list);
       })
@@ -63,7 +65,7 @@ function Home() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user?.streamingProvider]);
 
   // Debounced search
   useEffect(() => {
