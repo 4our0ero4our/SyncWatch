@@ -1,5 +1,5 @@
 import { getFirebaseAuth, getFirestore } from "../config/firebase";
-import { USERS_COLLECTION, IUser } from "../models/User";
+import { USERS_COLLECTION, IUser, StreamingProvider } from "../models/User";
 import { signToken } from "../utils/jwt.util";
 import { logger } from "../utils/logger";
 
@@ -41,7 +41,16 @@ export async function findOrCreateUserAndSign(
   email: string,
   displayName: string,
   avatar?: string
-): Promise<{ token: string; user: { id: string; email: string; displayName: string; avatar?: string } }> {
+): Promise<{
+  token: string;
+  user: {
+    id: string;
+    email: string;
+    displayName: string;
+    avatar?: string;
+    streamingProvider?: StreamingProvider;
+  };
+}> {
   const db = getFirestore();
   const users = db.collection(USERS_COLLECTION);
   const docId = `${provider}:${providerId}`;
@@ -66,7 +75,7 @@ export async function findOrCreateUserAndSign(
     user = {
       ...data,
       email,
-      displayName,
+      displayName: data.displayName || displayName,
       avatar: avatar ?? data.avatar,
       updatedAt: now,
     };

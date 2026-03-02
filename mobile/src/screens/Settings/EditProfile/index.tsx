@@ -10,25 +10,40 @@ import Typography from "@/src/components/common/Typography";
 import { avatars } from "@/src/utils/dummyData";
 import StackHeader from "@/src/components/StackHeader";
 import { useAuth } from "@/src/context/AuthContext";
+import { updateProfile } from "@/src/services/user";
+import { Alert } from "react-native";
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, token, login } = useAuth();
 
   const [selectedAvatar, setSelectedAvatar] = useState(1);
-  const [name, setName] = useState(user?.displayName ?? "Snow Olohijere");
-  const [email, setEmail] = useState(user?.email ?? "snow@gmail.com");
+  const [name, setName] = useState(user?.displayName ?? "");
+  const email = user?.email ?? "";
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
-    console.log("[EditProfileScreen] Save changes:", {
-      selectedAvatar,
-      name,
-      email,
-    });
-    console.log(
-      "[EditProfileScreen] NOTE: Persisting profile to backend is not implemented yet."
-    );
-    router.back();
+  const handleSave = async () => {
+    if (!user || !token) {
+      router.back();
+      return;
+    }
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === user.displayName) {
+      router.back();
+      return;
+    }
+    try {
+      setSaving(true);
+      const updated = await updateProfile(token, { displayName: trimmed });
+      login({ user: { ...user, displayName: updated.displayName }, token });
+      console.log("[EditProfileScreen] displayName updated:", updated.displayName);
+      router.back();
+    } catch (e: any) {
+      console.error("[EditProfileScreen] handleSave error:", e);
+      Alert.alert("Error", e?.message ?? "Failed to update profile.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleBack = () => {
@@ -40,7 +55,7 @@ export default function EditProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.descriptionContainer}>
           <Typography variant="smallBody" weight="medium">
-            Select from the avatars below to change your profile icon.
+            Select an avatar and update your display name. Your email is fixed.
           </Typography>
         </View>
         <View style={styles.avatarGrid}>
@@ -70,18 +85,18 @@ export default function EditProfileScreen() {
             <Input
               label="Email"
               value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email"
+              placeholder="Email"
               keyboardType="email-address"
               autoCapitalize="none"
               variant="secondary"
+              editable={false}
             />
           </View>
         </View>
 
         <View style={styles.buttonContainer}>
-          <Button title="save changes" variant="primary" onPress={handleSave}>
-            Save changes
+          <Button title="save changes" variant="primary" onPress={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "Save changes"}
           </Button>
         </View>
       </ScrollView>

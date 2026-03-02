@@ -9,7 +9,7 @@ type BackendUser = {
   email: string;
   displayName: string;
   avatar?: string;
-  streamingProvider?: "netflix" | "prime";
+  streamingProvider?: "netflix" | "prime" | "youtube";
 };
 
 type BackendLoginResponse = {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
@@ -17,7 +17,18 @@ export default function RoomWebViewScreen() {
   const [movieTitle, setMovieTitle] = useState<string | null>(null);
   const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
 
-  const provider = user?.streamingProvider ?? "netflix";
+  const provider = useMemo(
+    () => user?.streamingProvider ?? "netflix",
+    [user?.streamingProvider]
+  );
+
+  const urlMatchesProvider = (url: string | null, p: typeof provider) => {
+    if (!url) return false;
+    if (p === "netflix") return url.includes("netflix.com");
+    if (p === "prime") return url.includes("primevideo.com");
+    if (p === "youtube") return url.includes("youtube.com") || url.includes("youtu.be");
+    return false;
+  };
 
   useEffect(() => {
     if (!roomId || !token) {
@@ -29,14 +40,23 @@ export default function RoomWebViewScreen() {
         const host = room.hostId === user?.id;
         setIsHost(host);
         setMovieTitle(room.movieTitle ?? null);
-        setCurrentVideoUrl(room.currentVideoUrl ?? null);
+        const roomUrl = room.currentVideoUrl ?? null;
+        if (roomUrl && !urlMatchesProvider(roomUrl, provider)) {
+          console.log("[RoomWebViewScreen] ignoring currentVideoUrl due to provider mismatch", {
+            roomUrl,
+            provider,
+          });
+          setCurrentVideoUrl(null);
+        } else {
+          setCurrentVideoUrl(roomUrl);
+        }
         joinRoom(roomId, token).catch(() => {});
       })
       .catch((e) => {
         console.error("[RoomWebViewScreen] failed to load room", e);
       })
       .finally(() => setLoading(false));
-  }, [roomId, token, user?.id]);
+  }, [roomId, token, user?.id, provider]);
 
   const onVideoUrlUpdated = (url: string) => setCurrentVideoUrl(url);
 

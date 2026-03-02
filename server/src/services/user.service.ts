@@ -28,22 +28,38 @@ export async function getUserProfile(userId: string): Promise<UserProfileRespons
 }
 
 /**
- * Updates a user's streaming provider preference.
+ * Updates a user's profile fields (currently displayName and/or streamingProvider).
  */
-export async function updateStreamingProvider(
+export async function updateUserProfile(
   userId: string,
-  streamingProvider: StreamingProvider
+  updates: { displayName?: string; streamingProvider?: StreamingProvider }
 ): Promise<UserProfileResponse | null> {
   const db = getFirestore();
   const ref = db.collection(USERS_COLLECTION).doc(userId);
   const snap = await ref.get();
   if (!snap.exists) return null;
-  await ref.set(
-    {
-      streamingProvider,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+
+  const payload: Partial<IUser> & { updatedAt: admin.firestore.FieldValue } = {
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  } as any;
+
+  if (typeof updates.displayName === "string") {
+    (payload as any).displayName = updates.displayName;
+  }
+  if (updates.streamingProvider) {
+    (payload as any).streamingProvider = updates.streamingProvider;
+  }
+
+  await ref.set(payload, { merge: true });
   return getUserProfile(userId);
+}
+
+/**
+ * Legacy helper: updates only the streaming provider preference.
+ */
+export async function updateStreamingProvider(
+  userId: string,
+  streamingProvider: StreamingProvider
+): Promise<UserProfileResponse | null> {
+  return updateUserProfile(userId, { streamingProvider });
 }

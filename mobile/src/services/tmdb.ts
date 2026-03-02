@@ -3,6 +3,7 @@ import {
   TMDB_IMAGE_BASE_URL,
   getTmdbApiKey,
 } from "@/src/config/tmdb";
+import type { StreamingProvider } from "@/src/context/AuthContext";
 import { MovieProps } from "@/src/screens/homePage/CreateParty/types";
 
 type TmdbMovieResult = {
@@ -61,10 +62,44 @@ export async function fetchPopularMovies(): Promise<MovieProps[]> {
   return (data.results ?? []).map(mapTmdbToMovieProps);
 }
 
+const TMDB_DISCOVER_PROVIDER_IDS: Partial<Record<StreamingProvider, string>> = {
+  netflix: "8",
+  prime: "9|119",
+  // youtube: no official flatrate provider id; skip discover filter
+};
+
+export async function fetchPopularMoviesForProvider(
+  appProvider?: StreamingProvider
+): Promise<MovieProps[]> {
+  const apiKey = getTmdbApiKey();
+  if (!apiKey) {
+    return [];
+  }
+
+  const providerIds = appProvider ? TMDB_DISCOVER_PROVIDER_IDS[appProvider] : undefined;
+  let url: string;
+
+  if (providerIds) {
+    url = `${TMDB_BASE_URL}/discover/movie?api_key=${apiKey}&language=en-US&sort_by=popularity.desc&page=1&with_watch_monetization_types=flatrate&watch_region=US&with_watch_providers=${encodeURIComponent(
+      providerIds
+    )}`;
+  } else {
+    url = `${TMDB_BASE_URL}/movie/popular?api_key=${apiKey}&language=en-US&page=1`;
+  }
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`TMDB request failed: ${res.status} ${res.statusText}`);
+  }
+  const data = (await res.json()) as TmdbPopularResponse;
+  return (data.results ?? []).map(mapTmdbToMovieProps);
+}
+
 /** Maps our app provider IDs to TMDB provider names (flatrate). */
-const TMDB_PROVIDER_NAMES: Record<string, string> = {
-  netflix: "Netflix",
-  prime: "Amazon Prime Video",
+const TMDB_PROVIDER_NAMES: Record<string, string[]> = {
+  netflix: ["Netflix"],
+  prime: ["Amazon Prime Video"],
+  youtube: ["YouTube", "YouTube Premium"],
 };
 
 type TmdbWatchProvider = {
@@ -93,7 +128,7 @@ const TMDB_FETCH_TIMEOUT_MS = 8000;
  */
 export async function isMovieOnProvider(
   movieId: number,
-  appProvider: "netflix" | "prime"
+  appProvider: "netflix" | "prime" | "youtube"
 ): Promise<boolean> {
   const apiKey = getTmdbApiKey();
   if (!apiKey) {
@@ -112,8 +147,8 @@ export async function isMovieOnProvider(
     const data = (await res.json()) as TmdbWatchProvidersResponse;
     const usProviders = data.results?.US;
     const flatrate = usProviders?.flatrate ?? [];
-    const tmdbName = TMDB_PROVIDER_NAMES[appProvider];
-    return flatrate.some((p) => p.provider_name === tmdbName);
+    const names = TMDB_PROVIDER_NAMES[appProvider] ?? [];
+    return flatrate.some((p) => names.includes(p.provider_name));
   } catch (e) {
     clearTimeout(timeoutId);
     if ((e as Error)?.name === "AbortError") {

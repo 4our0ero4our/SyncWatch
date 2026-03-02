@@ -1,6 +1,6 @@
 import { API_BASE_URL, USERS_PATH } from "@/src/config/api";
 
-export type StreamingProvider = "netflix" | "prime";
+export type StreamingProvider = "netflix" | "prime" | "youtube";
 
 export type UserProfile = {
   id: string;
@@ -50,5 +50,30 @@ export async function updateStreamingProvider(
   }
   const data = (await res.json()) as UserProfile;
   console.log("[user] updateStreamingProvider: success", { streamingProvider: data.streamingProvider });
+  return data;
+}
+
+export async function updateProfile(
+  token: string,
+  updates: Partial<Pick<UserProfile, "displayName" | "streamingProvider">>
+): Promise<UserProfile> {
+  console.log("[user] updateProfile:", updates);
+  const res = await fetch(`${API_BASE_URL}${USERS_PATH}/me`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Update profile failed: ${res.status}`);
+  }
+  const data = (await res.json()) as UserProfile;
+  console.log("[user] updateProfile: success", {
+    displayName: data.displayName,
+    streamingProvider: data.streamingProvider,
+  });
   return data;
 }
