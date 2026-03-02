@@ -14,14 +14,11 @@ import {
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
-import { AuthProvider, useAuth } from "@/src/context/AuthContext";
+import { AuthProvider } from "@/src/context/AuthContext";
 
 SplashScreen.preventAutoHideAsync();
 
 function RootStack() {
-  const { isAuthenticated } = useAuth();
-  console.log("[RootStack] isAuthenticated:", isAuthenticated);
-
   const [loaded, error] = useFonts({
     "DM-Sans": DMSans_400Regular,
     "DM-Sans-Medium": DMSans_500Medium,
@@ -61,27 +58,23 @@ function RootStack() {
           headerShown: false,
         }}
       >
-        {/* Onboarding */}
         <Stack.Screen name="index" options={{ gestureEnabled: false }} />
-
-        {/* Always allow provider selection (comes right after login) */}
         <Stack.Screen
           name="select-provider"
           options={{ gestureEnabled: false }}
         />
-
-        {/* Protected routes: only registered in navigator when authenticated */}
-        {isAuthenticated ? (
-          <Stack.Screen
-            name="party-lobby"
-            options={{ gestureEnabled: false }}
-          />
-        ) : null}
-        {isAuthenticated ? (
-          <Stack.Screen 
-            name="(tabs)" 
-            options={{ gestureEnabled: false }} />
-        ) : null}
+        <Stack.Screen
+          name="party-lobby"
+          options={{ gestureEnabled: false }}
+        />
+        <Stack.Screen
+          name="room-webview"
+          options={{ gestureEnabled: false }}
+        />
+        <Stack.Screen
+          name="(tabs)"
+          options={{ gestureEnabled: false }}
+        />
       </Stack>
     </SafeAreaProvider>
   );

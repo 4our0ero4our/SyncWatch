@@ -86,6 +86,7 @@ export async function getMessages(
     };
     return {
       id: d.id,
+      roomId,
       userId: data.userId,
       type: data.type,
       content: data.content,

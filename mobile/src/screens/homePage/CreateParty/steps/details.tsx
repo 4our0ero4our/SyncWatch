@@ -27,7 +27,7 @@ export const Details = ({
             </Typography>
           </View>
           <Typography variant="smallBody" weight="bold">
-            {`${"#"}${movie?.id} in Movies Today`}
+            {movie?.title}
           </Typography>
         </View>
         <Typography variant="smallBody" weight="regular">

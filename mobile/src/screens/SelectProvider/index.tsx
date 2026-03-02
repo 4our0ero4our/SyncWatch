@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Alert } from "react-native";
 import { styles } from "./styles";
 import { Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -7,10 +8,45 @@ import Button from "@/src/components/common/Button";
 import Typography from "@/src/components/common/Typography";
 import { selectProviderData } from "@/src/utils/dummyData";
 import { useRouter } from "expo-router";
+import { useAuth } from "@/src/context/AuthContext";
+import { updateStreamingProvider } from "@/src/services/user";
 
 const SelectProvider = () => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { token, setStreamingProvider, user } = useAuth();
+
+  useEffect(() => {
+    if (user?.streamingProvider) {
+      const match = selectProviderData.find((p) => p.providerId === user.streamingProvider);
+      if (match) setSelectedId(match.id);
+    }
+  }, [user?.streamingProvider]);
+
+  console.log("[SelectProvider] render", { selectedId, loading, streamingProvider: user?.streamingProvider });
+
+  const handleContinue = async () => {
+    const selected = selectProviderData.find((p) => p.id === selectedId);
+    if (!selected || !token) {
+      console.log("[SelectProvider] handleContinue: no selection or token", { selectedId, hasToken: !!token });
+      return;
+    }
+    console.log("[SelectProvider] handleContinue: saving provider", selected.providerId);
+    setLoading(true);
+    try {
+      await updateStreamingProvider(token, selected.providerId);
+      setStreamingProvider(selected.providerId);
+      console.log("[SelectProvider] handleContinue: saved, navigating to home");
+      router.push("/(tabs)/home");
+    } catch (e: any) {
+      console.error("[SelectProvider] handleContinue error:", e);
+      Alert.alert("Error", e?.message ?? "Failed to save streaming provider.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View>
@@ -58,11 +94,11 @@ const SelectProvider = () => {
         </View>
       </View>
       <Button
-        disabled={selectedId === null}
+        disabled={selectedId === null || loading}
         title="selectProvider"
-        onPress={() => router.push("/(tabs)/home")}
+        onPress={handleContinue}
       >
-        Continue to homepage
+        {loading ? "Saving..." : "Continue to homepage"}
       </Button>
     </SafeAreaView>
   );

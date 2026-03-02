@@ -6,11 +6,14 @@ import React, {
   useState,
 } from "react";
 
+export type StreamingProvider = "netflix" | "prime";
+
 export type AuthUser = {
   id: string;
   email: string;
   displayName: string;
   avatar?: string;
+  streamingProvider?: StreamingProvider;
 };
 
 type AuthContextValue = {
@@ -19,6 +22,7 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   login: (payload: { user: AuthUser; token: string }) => void;
   logout: () => void;
+  setStreamingProvider: (provider: StreamingProvider) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -41,6 +45,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setToken(null);
   }, []);
 
+  const setStreamingProvider = useCallback((streamingProvider: StreamingProvider) => {
+    console.log("[AuthContext] setStreamingProvider:", streamingProvider);
+    setUser((prev) => (prev ? { ...prev, streamingProvider } : null));
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -48,8 +57,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       isAuthenticated: !!user && !!token,
       login,
       logout,
+      setStreamingProvider,
     }),
-    [user, token, login, logout]
+    [user, token, login, logout, setStreamingProvider]
   );
 
   console.log("[AuthContext] render, state:", { user, hasToken: !!token });

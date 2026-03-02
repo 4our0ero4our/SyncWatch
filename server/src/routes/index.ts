@@ -1,5 +1,6 @@
 import { Router } from "express";
 import authRoutes from "./auth.routes";
+import userRoutes from "./user.routes";
 import roomRoutes from "./room.routes";
 import participantRoutes from "./participant.routes";
 import syncRoutes from "./sync.routes";
@@ -12,6 +13,7 @@ const router = Router();
 router.get("/health", health);
 
 router.use("/auth", authRoutes);
+router.use("/users", userRoutes);
 router.use("/rooms", roomRoutes);
 
 /** Mount room-scoped routes under /api/rooms/:roomId/... */

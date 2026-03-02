@@ -81,6 +81,7 @@ export async function findOrCreateUserAndSign(
       email: user.email,
       displayName: user.displayName,
       avatar: user.avatar,
+      streamingProvider: user.streamingProvider,
     },
   };
 }

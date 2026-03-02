@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Image, ScrollView } from "react-native";
 
 import { styles } from "../styles";
@@ -11,7 +11,36 @@ export const Form = ({
   onClose,
   movie,
   handleCreateParty,
+  onCreateRoom,
 }: CreatePartyProps) => {
+  const [partyName, setPartyName] = useState("");
+  const [partyDescription, setPartyDescription] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleGenerateInvite = async () => {
+    const name = partyName.trim();
+    console.log("[Form] handleGenerateInvite", { name, description: partyDescription });
+    if (!name) {
+      setError("Please enter a party name.");
+      return;
+    }
+    if (!onCreateRoom) {
+      handleCreateParty();
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      await onCreateRoom(name, partyDescription.trim());
+      console.log("[Form] handleGenerateInvite: success");
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to create party. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <ScrollView>
       <View style={styles.description}>
@@ -32,13 +61,31 @@ export const Form = ({
         </View>
       </View>
       <View style={styles.formContainer}>
-        <Input placeholder="Enter a name" label="Set party name" />
+        <Input
+          placeholder="Enter a name"
+          label="Set party name"
+          value={partyName}
+          onChangeText={setPartyName}
+          editable={!loading}
+        />
         <Input
           placeholder="Describe your watch party"
           label="Enter a description (optional)"
+          value={partyDescription}
+          onChangeText={setPartyDescription}
+          editable={!loading}
         />
-        <Button onPress={handleCreateParty} title="generate invite">
-          Generate invite
+        {error ? (
+          <Typography variant="caption" weight="regular" style={styles.formError}>
+            {error}
+          </Typography>
+        ) : null}
+        <Button
+          onPress={handleGenerateInvite}
+          title="generate invite"
+          disabled={loading}
+        >
+          {loading ? "Creating..." : "Generate invite"}
         </Button>
       </View>
     </ScrollView>

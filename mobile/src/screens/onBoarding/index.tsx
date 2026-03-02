@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Alert, View } from "react-native";
+import { ActivityIndicator, Alert, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -66,6 +66,9 @@ export default function Onboarding() {
           ))}
         </View>
         <View style={styles.buttonGroup}>
+          {loading && (
+            <ActivityIndicator size="large" color="#FF007B" style={{ marginBottom: 8 }} />
+          )}
           <Button
             title="appleLogo"
             icon={<AppleLogo width={20} height={20} />}
@@ -81,7 +84,7 @@ export default function Onboarding() {
             disabled={loading}
             onPress={loginWithGoogle}
           >
-            Continue with Google
+            {loading ? "Signing in..." : "Continue with Google"}
           </Button>
         </View>
       </View>

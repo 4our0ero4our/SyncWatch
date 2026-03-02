@@ -5,6 +5,10 @@
 export interface IRoom {
   name: string;
   hostId: string;
+  inviteCode: string;
+  description?: string;
+  movieTitle?: string;
+  movieImageUrl?: string;
   currentVideoUrl?: string;
   createdAt: Date;
   updatedAt: Date;

@@ -52,6 +52,9 @@ export const styles = StyleSheet.create((theme) => ({
     paddingTop: 10,
     paddingBottom: 20,
   },
+  formError: {
+    color: theme.color.error,
+  },
 
   // success
   createdPartysection: {

@@ -6,8 +6,10 @@ import {
   Image,
   FlatList,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 import { Stages } from "./types";
 import Header from "../../components/TabHeader";
@@ -15,7 +17,8 @@ import { SearchIcon } from "@/src/assets/svgs";
 import MovieModal from "@/src/components/Modal";
 import Input from "@/src/components/common/Input";
 import { MovieProps } from "../homePage/CreateParty/types";
-import { fetchPopularMovies } from "@/src/services/tmdb";
+import { fetchPopularMovies, fetchSearchMovies, isMovieOnProvider } from "@/src/services/tmdb";
+import { createRoom } from "@/src/services/rooms";
 import { Details, Form, Success } from "./CreateParty";
 import Typography from "@/src/components/common/Typography";
 import { useAuth } from "@/src/context/AuthContext";
@@ -29,7 +32,13 @@ function Home() {
   const [movies, setMovies] = useState<MovieProps[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<MovieProps[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [checkingMovieId, setCheckingMovieId] = useState<number | null>(null);
+  const [createdRoom, setCreatedRoom] = useState<import("@/src/services/rooms").Room | null>(null);
+  const { user, token } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
@@ -48,17 +57,93 @@ function Home() {
     };
   }, []);
 
+  // Debounced search
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      fetchSearchMovies(trimmed)
+        .then((list) => {
+          if (!cancelled) setSearchResults(list);
+        })
+        .catch(() => {
+          if (!cancelled) setSearchResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearchLoading(false);
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  const displayMovies = searchQuery.trim() ? searchResults : movies;
+  const isSearchActive = searchQuery.trim().length > 0;
+  const showEmptyState =
+    isSearchActive && !searchLoading && displayMovies.length === 0;
+
   const handleCloseModal = () => {
     setModalVisible(false);
     setStage("details");
-    setTimeout(() => setSelectedMovie(null), 300);
+    setTimeout(() => {
+      setSelectedMovie(null);
+      setCreatedRoom(null);
+    }, 300);
   };
 
-  const handleMoviePress = (movie: MovieProps) => {
-    setSelectedMovie(movie);
-    setModalVisible(true);
+  /**
+   * Handles the movie press event. Checks if user has a streaming provider and if the movie
+   * is available on that platform before opening the create party modal.
+   */
+  const handleMoviePress = async (movie: MovieProps) => {
+    const provider = user?.streamingProvider;
+    if (!provider) {
+      Alert.alert(
+        "Select Streaming Provider",
+        "Please select your streaming provider in Settings first.",
+        [
+          { text: "OK" },
+          { text: "Go to Settings", onPress: () => router.push("/(tabs)/settings") },
+        ]
+      );
+      return;
+    }
+
+    setCheckingMovieId(movie.id);
+    try {
+      const available = await isMovieOnProvider(movie.id, provider);
+      if (!available) {
+        const providerLabel = provider === "netflix" ? "Netflix" : "Prime Video";
+        Alert.alert(
+          "Not Available",
+          `"${movie.title}" isn't available on ${providerLabel}. Change your streaming provider in Settings?`,
+          [
+            { text: "Cancel" },
+            { text: "Change in Settings", onPress: () => router.push("/(tabs)/settings") },
+          ]
+        );
+        return;
+      }
+      setSelectedMovie(movie);
+      setModalVisible(true);
+    } catch (e) {
+      Alert.alert("Error", "Could not check availability. Please try again.");
+    } finally {
+      setCheckingMovieId(null);
+    }
   };
 
+  /**
+   * Handles the create party event.
+   */
   const handleCreateParty = () => {
     if (stage === "details") {
       setStage("form");
@@ -67,15 +152,57 @@ function Home() {
     }
   };
 
-  const renderItem = ({ item }: { item: MovieProps }) => (
-    <Pressable style={styles.movieCard} onPress={() => handleMoviePress(item)}>
-      <Image
-        source={item.image}
-        style={styles.movieImage}
-        resizeMode="cover"
-      />
-    </Pressable>
-  );
+  /**
+   * Gets the movie image URL.
+   * @param movie - The movie to get the image URL for.
+   * @returns The movie image URL.
+   */
+  const getMovieImageUrl = (movie: MovieProps | null): string | undefined => {
+    if (!movie?.image) return undefined;
+    if (typeof movie.image === "object" && "uri" in movie.image && typeof movie.image.uri === "string") {
+      return movie.image.uri;
+    }
+    return undefined;
+  };
+
+  const handleCreateRoom = async (name: string, description: string) => {
+    console.log("[Home] handleCreateRoom", { name, description });
+    if (!token) throw new Error("You must be logged in to create a party.");
+    const room = await createRoom(
+      {
+        name,
+        description: description || undefined,
+        movieTitle: selectedMovie?.title,
+        movieImageUrl: getMovieImageUrl(selectedMovie),
+      },
+      token
+    );
+    console.log("[Home] handleCreateRoom: success", room.id, room.inviteCode);
+    setCreatedRoom(room);
+    setStage("success");
+  };
+
+  const renderItem = ({ item }: { item: MovieProps }) => {
+    const isChecking = checkingMovieId === item.id;
+    return (
+      <Pressable
+        style={[styles.movieCard, isChecking && styles.movieCardDisabled]}
+        onPress={() => handleMoviePress(item)}
+        disabled={checkingMovieId !== null}
+      >
+        <Image
+          source={item.image}
+          style={styles.movieImage}
+          resizeMode="cover"
+        />
+        {isChecking && (
+          <View style={styles.movieCardOverlay}>
+            <ActivityIndicator size="small" color="#fff" />
+          </View>
+        )}
+      </Pressable>
+    );
+  };
 
   if (loading) {
     return (
@@ -89,6 +216,8 @@ function Home() {
             variant="secondary"
             placeholder="Search movies or shows"
             leftIcon={<SearchIcon />}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
         </View>
         <View style={[styles.movieSection, styles.loadingContainer]}>
@@ -109,6 +238,8 @@ function Home() {
           variant="secondary"
           placeholder="Search movies or shows"
           leftIcon={<SearchIcon />}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
         />
       </View>
       <View style={styles.movieSection}>
@@ -127,18 +258,50 @@ function Home() {
           <>
             <View style={styles.searchesWrapper}>
               <Typography variant="body" weight="medium">
-                Top Searches
+                {isSearchActive ? "Search results" : "Top Searches"}
               </Typography>
             </View>
-            <FlatList
-              data={movies}
-              renderItem={renderItem}
-              keyExtractor={(item) => item.id.toString()}
-              numColumns={2}
-              contentContainerStyle={styles.gridContent}
-              columnWrapperStyle={styles.row}
-              showsVerticalScrollIndicator={false}
-            />
+            {searchLoading && isSearchActive ? (
+              <View style={styles.searchLoadingContainer}>
+                <ActivityIndicator size="large" color="#E50914" />
+                <Typography
+                  variant="smallBody"
+                  weight="medium"
+                  color={theme.color.textMuted}
+                  style={styles.searchLoadingText}
+                >
+                  Searching...
+                </Typography>
+              </View>
+            ) : showEmptyState ? (
+              <View style={styles.emptyStateContainer}>
+                <Typography
+                  variant="body"
+                  weight="medium"
+                  style={styles.emptyStateTitle}
+                >
+                  No movies found
+                </Typography>
+                <Typography
+                  variant="smallBody"
+                  weight="regular"
+                  color={theme.color.textMuted}
+                  style={styles.emptyStateMessage}
+                >
+                  Try a different search term or check the spelling.
+                </Typography>
+              </View>
+            ) : (
+              <FlatList
+                data={displayMovies}
+                renderItem={renderItem}
+                keyExtractor={(item) => item.id.toString()}
+                numColumns={2}
+                contentContainerStyle={styles.gridContent}
+                columnWrapperStyle={styles.row}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
           </>
         )}
       </View>
@@ -155,6 +318,7 @@ function Home() {
             handleCreateParty={handleCreateParty}
             onClose={handleCloseModal}
             movie={selectedMovie}
+            onCreateRoom={handleCreateRoom}
           />
         )}
         {stage === "success" && (
@@ -162,6 +326,7 @@ function Home() {
             handleCreateParty={handleCreateParty}
             onClose={handleCloseModal}
             movie={selectedMovie}
+            createdRoom={createdRoom}
           />
         )}
       </MovieModal>

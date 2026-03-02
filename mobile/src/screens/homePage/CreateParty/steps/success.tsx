@@ -1,5 +1,6 @@
 import React from "react";
 import { ScrollView, View } from "react-native";
+import { useRouter } from "expo-router";
 
 import { styles } from "../styles";
 import { CreatePartyProps } from "../types";
@@ -10,9 +11,29 @@ import ClipboardCopy from "@/src/components/clipBoard/index";
 
 export const Success = ({
   onClose,
-  movie,
-  handleCreateParty,
+  createdRoom,
 }: CreatePartyProps) => {
+  const router = useRouter();
+
+  const handleGoToParty = () => {
+    onClose();
+    if (createdRoom?.id) {
+      router.push({ pathname: "/party-lobby", params: { roomId: createdRoom.id } });
+    }
+  };
+
+  if (!createdRoom) {
+    return (
+      <ScrollView>
+        <View style={styles.createdPartysection}>
+          <Typography variant="body" weight="regular">
+            Loading...
+          </Typography>
+        </View>
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView>
       <View style={styles.createdPartysection}>
@@ -24,10 +45,10 @@ export const Success = ({
             <RightBanner />
           </View>
           <Typography variant="subHeading" weight="bold">
-            Three Muskeeteers!
+            {createdRoom.name}
           </Typography>
           <Typography variant="smallerBody" weight="medium">
-            Our first watch party ever!
+            {createdRoom.description || "No description"}
           </Typography>
           <View style={styles.bannerRight}>
             <LeftBanner />
@@ -35,11 +56,13 @@ export const Success = ({
         </View>
         <View>
           <ClipboardCopy
-            text="7FQ9K2"
+            text={createdRoom.inviteCode}
             label="Share invite code"
           />
         </View>
-        <Button title="go-to-party">Go to Party</Button>
+        <Button title="go-to-party" onPress={handleGoToParty}>
+          Go to Party
+        </Button>
       </View>
     </ScrollView>
   );

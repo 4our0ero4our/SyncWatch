@@ -29,11 +29,13 @@ export const selectProviderData: selectProviderType[] = [
     id: 1,
     logo: <NetflixLogo />,
     title: "Netflix",
+    providerId: "netflix",
   },
   {
     id: 2,
     logo: <PrimeLogo />,
     title: "Prime Video",
+    providerId: "prime",
   },
 ];
 
