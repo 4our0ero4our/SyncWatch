@@ -1,12 +1,14 @@
-import React, { useRef, useCallback, useState } from "react";
-import { View, StyleSheet, Text } from "react-native";
-import { useUnistyles } from "react-native-unistyles";
+/* eslint-disable react/no-unescaped-entities */
+import React, { useRef } from "react";
+import { View, Pressable, Linking } from "react-native";
+import { useUnistyles, StyleSheet } from "react-native-unistyles";
 import Typography from "@/src/components/common/Typography";
 import { updateRoomPlayback } from "@/src/services/rooms";
 import type { WebViewMessageEvent } from "react-native-webview";
 
 let WebView: any = null;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   WebView = require("react-native-webview").WebView;
 } catch {
   // WebView native module not available (e.g. Expo Go).
@@ -62,13 +64,41 @@ type RoomWebViewProps = {
   onProgressUpdated?: (progress: number) => void;
 };
 
-function WebViewFallback() {
+function WebViewFallback({
+  provider,
+}: {
+  provider: "netflix" | "prime" | "youtube";
+}) {
   const { theme } = useUnistyles();
   return (
-    <View style={[styles.fallback, { backgroundColor: theme.color.background }]}>
-      <Typography variant="body" weight="medium" color={theme.color.textMuted} style={{ textAlign: "center" }}>
-        In-app video needs a native build. Run "npx expo run:android" and open from the installed app.
+    <View
+      style={[styles.fallback, { backgroundColor: theme.color.background }]}
+    >
+      <Typography
+        variant="body"
+        weight="medium"
+        color={theme.color.textMuted}
+        style={{ textAlign: "center", marginBottom: 8 }}
+      >
+        In-app streaming needs a native build. If you opened this via Expo Go,
+        that app does not include WebView.
       </Typography>
+      <Typography
+        variant="smallBody"
+        color={theme.color.textMuted}
+        style={{ textAlign: "center", marginBottom: 16 }}
+      >
+        Build and install once: connect your phone, run "npx expo run:android",
+        then open this project from the installed app (not Expo Go).
+      </Typography>
+      <Pressable
+        style={[styles.openBtn, { backgroundColor: theme.color.primary }]}
+        onPress={() => Linking.openURL(url)}
+      >
+        <Typography variant="body" weight="bold" color={theme.color.white}>
+          Open {provider === "netflix" ? "Netflix" : "Prime"} in browser
+        </Typography>
+      </Pressable>
     </View>
   );
 }
@@ -81,28 +111,74 @@ export default function RoomWebView({
   onProgressUpdated,
 }: RoomWebViewProps) {
   const webViewRef = useRef<any>(null);
-  const [httpError, setHttpError] = useState<string | null>(null);
+  const defaultUrl =
+    STREAMING_BASE_URLS[provider] ?? STREAMING_BASE_URLS.netflix;
+  const trimmedVideoUrl = initialVideoUrl?.trim() ?? "";
+  const trimmedTitle = movieTitle?.trim() ?? "";
 
-  const rawId = videoUrl?.trim() || "";
-  const cleanVideoId = String(rawId).replace(/\D/g, "");
-  const html = cleanVideoId ? VIMEO_EMBED_HTML(cleanVideoId, isHost) : null;
+  let initialUrl = defaultUrl;
+  let useYouTubeEmbed = false;
+  let youTubeVideoId: string | null = null;
 
-  console.log("[RoomWebView] render", {
-    roomId,
-    isHost,
-    videoUrl,
-    cleanVideoId,
-    hasHtml: !!html,
-  });
+  if (trimmedVideoUrl.length > 0) {
+    if (provider === "youtube") {
+      try {
+        const url = new URL(trimmedVideoUrl);
+        if (url.hostname.includes("youtu.be")) {
+          youTubeVideoId = url.pathname.replace("/", "");
+        } else {
+          youTubeVideoId = url.searchParams.get("v");
+        }
+      } catch {
+        youTubeVideoId = null;
+      }
+      if (youTubeVideoId) {
+        useYouTubeEmbed = true;
+      } else {
+        initialUrl = trimmedVideoUrl;
+      }
+    } else {
+      initialUrl = trimmedVideoUrl;
+    }
+  } else if (trimmedTitle.length > 0) {
+    const q = encodeURIComponent(trimmedTitle);
+    if (provider === "netflix") {
+      initialUrl = `${defaultUrl}/search?q=${q}`;
+    } else if (provider === "prime") {
+      initialUrl = `${defaultUrl}/search?phrase=${q}`;
+    } else if (provider === "youtube") {
+      initialUrl = `${defaultUrl}/results?search_query=${q}`;
+    }
+  }
 
-  const reportProgress = useCallback(
-    (progress: number) => {
-      if (!isHost) return;
-      updateRoomPlayback(roomId, { progress }, token).catch(() => {});
-      onProgressUpdated?.(progress);
-    },
-    [roomId, token, isHost, onProgressUpdated]
-  );
+  const handleNavigationStateChange = (navState: { url: string }) => {
+    const currentUrl = navState.url;
+    console.log("[RoomWebView] navigation", {
+      url: currentUrl,
+      provider,
+      isHost,
+    });
+    if (isHost) {
+      const isNetflixWatch = currentUrl.includes("netflix.com/watch/");
+      const isPrimeWatch =
+        currentUrl.includes("primevideo.com") &&
+        (currentUrl.includes("/watch/") || currentUrl.includes("/gp/video/"));
+      const isYoutubeWatch = currentUrl.includes("youtube.com/watch?v=");
+      if (isNetflixWatch || isPrimeWatch || isYoutubeWatch) {
+        console.log("[RoomWebView] detected watch URL, saving to room");
+        updateRoomVideoUrl(roomId, currentUrl, token)
+          .then(() => {
+            onVideoUrlUpdated?.(currentUrl);
+          })
+          .catch(() => {});
+      }
+    }
+  };
+
+  const handleWebBack = () => {
+    webViewRef.current?.goBack?.();
+    console.log("[RoomWebView] webview goBack");
+  };
 
   const reportCompleted = useCallback(() => {
     if (!isHost) return;
@@ -193,11 +269,19 @@ export default function RoomWebView({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { width: "100%" },
-  webviewFixed: {
-    width: "100%",
-    height: WEBVIEW_HEIGHT,
+const styles = StyleSheet.create((theme, rt) => ({
+  container: {
+    flex: 1,
+    backgroundColor: theme.color.background,
+  },
+  webview: { flex: 1 },
+  controlsBar: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    zIndex: 10,
+    flexDirection: "row",
+    gap: 8,
   },
   placeholder: {
     backgroundColor: "#111",
@@ -232,4 +316,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
   },
-});
+}));

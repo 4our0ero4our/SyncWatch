@@ -6,7 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { styles } from "./styles";
 import Button from "@/src/components/common/Button";
-import { GoogleLogo, AppleLogo } from "@/src/assets/svgs";
+import { GoogleLogo } from "@/src/assets/svgs";
 import OnboardingSlides from "@/src/components/OnboardingSlide";
 import { onboardingData } from "../../utils/dummyData";
 import { loginWithGoogleProvider } from "@/src/services/auth";
@@ -16,7 +16,8 @@ export default function Onboarding() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { login, isAuthenticated } = useAuth();
+  const { login,  } = useAuth();
+
 
   const loginWithGoogle = async () => {
     try {
@@ -67,13 +68,6 @@ export default function Onboarding() {
           {loading && (
             <ActivityIndicator size="large" color="#FF007B" style={{ marginBottom: 8 }} />
           )}
-          <Button
-            title="appleLogo"
-            icon={<AppleLogo width={20} height={20} />}
-            variant="primary"
-          >
-            Continue with Apple
-          </Button>
 
           <Button
             title="googleLogo"

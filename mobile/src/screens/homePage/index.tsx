@@ -16,7 +16,11 @@ import { SearchIcon } from "@/src/assets/svgs";
 import MovieModal from "@/src/components/Modal";
 import Input from "@/src/components/common/Input";
 import { MovieProps } from "../homePage/CreateParty/types";
-import { fetchVimeoVideosHomepage, searchVimeoVideos } from "@/src/services/vimeo";
+import {
+  fetchPopularMoviesForProvider,
+  fetchSearchMovies,
+  isMovieOnProvider,
+} from "@/src/services/tmdb";
 import { createRoom } from "@/src/services/rooms";
 import { Details, Form, Success } from "./CreateParty";
 import Typography from "@/src/components/common/Typography";
@@ -48,7 +52,10 @@ function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<MovieProps[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [createdRoom, setCreatedRoom] = useState<import("@/src/services/rooms").Room | null>(null);
+  const [checkingMovieId, setCheckingMovieId] = useState<number | null>(null);
+  const [createdRoom, setCreatedRoom] = useState<
+    import("@/src/services/rooms").Room | null
+  >(null);
   const { user, token } = useAuth();
   const router = useRouter();
 
@@ -122,9 +129,55 @@ function Home() {
     }, 300);
   };
 
-  const handleMoviePress = (movie: MovieProps) => {
-    setSelectedMovie(movie);
-    setModalVisible(true);
+  /**
+   * Handles the movie press event. Checks if user has a streaming provider and if the movie
+   * is available on that platform before opening the create party modal.
+   */
+  const handleMoviePress = async (movie: MovieProps) => {
+    const provider = user?.streamingProvider;
+    if (!provider) {
+      setAlertState({
+        message: "Please select your streaming provider in Settings first.",
+        primaryLabel: "Go to Settings",
+        onPrimary: () => {
+          setAlertState(null);
+          router.push("/(tabs)/settings");
+        },
+        secondaryLabel: "OK",
+        onSecondary: () => setAlertState(null),
+      });
+      return;
+    }
+
+    setCheckingMovieId(movie.id);
+    try {
+      const available = await isMovieOnProvider(movie.id, provider);
+      if (!available) {
+        const providerLabel =
+          provider === "netflix" ? "Netflix" : "Prime Video";
+        setAlertState({
+          message: `"${movie.title}" isn't available on ${providerLabel}. Change your streaming provider in Settings?`,
+          primaryLabel: "Change in Settings",
+          onPrimary: () => {
+            setAlertState(null);
+            router.push("/(tabs)/settings");
+          },
+          secondaryLabel: "Cancel",
+          onSecondary: () => setAlertState(null),
+        });
+        return;
+      }
+      setSelectedMovie(movie);
+      setModalVisible(true);
+    } catch {
+      setAlertState({
+        message: "Could not check availability. Please try again.",
+        primaryLabel: "OK",
+        onPrimary: () => setAlertState(null),
+      });
+    } finally {
+      setCheckingMovieId(null);
+    }
   };
 
   const handleCreateParty = () => {
@@ -137,7 +190,11 @@ function Home() {
 
   const getMovieImageUrl = (movie: MovieProps | null): string | undefined => {
     if (!movie?.image) return undefined;
-    if (typeof movie.image === "object" && "uri" in movie.image && typeof movie.image.uri === "string") {
+    if (
+      typeof movie.image === "object" &&
+      "uri" in movie.image &&
+      typeof movie.image.uri === "string"
+    ) {
       return movie.image.uri;
     }
     return undefined;
@@ -154,7 +211,7 @@ function Home() {
         movieImageUrl: getMovieImageUrl(selectedMovie),
         videoUrl: videoUrl || undefined,
       },
-      token
+      token,
     );
     setCreatedRoom(room);
     setStage("success");
