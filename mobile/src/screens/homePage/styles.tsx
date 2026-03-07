@@ -22,6 +22,7 @@ export const styles = StyleSheet.create((theme, rt) => ({
   },
   row: {
     justifyContent: "space-between",
+    columnGap: theme.spacing.s,
     marginBottom: theme.spacing.m,
   },
   loadingContainer: {
@@ -58,10 +59,10 @@ export const styles = StyleSheet.create((theme, rt) => ({
     textAlign: "center",
   },
   movieCard: {
-    height: 100,
-    width: 190,
-    borderRadius: theme.radius.m,
-    overflow: "hidden",
+    flex: 1,
+    aspectRatio: 16 / 9,
+    // borderRadius: theme.radius.xs,
+    // overflow: "hidden",
   },
   movieCardDisabled: {
     opacity: 0.7,

@@ -30,6 +30,7 @@ export type CreateRoomInput = {
   description?: string;
   movieTitle?: string;
   movieImageUrl?: string;
+  videoUrl?: string;
 };
 
 export type RoomResponse = {
@@ -40,6 +41,9 @@ export type RoomResponse = {
   description?: string;
   movieTitle?: string;
   movieImageUrl?: string;
+  videoUrl?: string;
+  progress?: number;
+  isCompleted?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -78,7 +82,9 @@ export async function createRoom(
       description: input.description ?? null,
       movieTitle: input.movieTitle ?? null,
       movieImageUrl: input.movieImageUrl ?? null,
-      currentVideoUrl: null, // Set when host starts playback in room WebView
+      videoUrl: input.videoUrl ?? null,
+      progress: 0,
+      isCompleted: false,
       createdAt: now,
       updatedAt: now,
     };
@@ -106,6 +112,9 @@ export async function createRoom(
       description: input.description,
       movieTitle: input.movieTitle,
       movieImageUrl: input.movieImageUrl,
+      videoUrl: input.videoUrl,
+      progress: 0,
+      isCompleted: false,
       createdAt,
       updatedAt,
     };
@@ -115,10 +124,7 @@ export async function createRoom(
   }
 }
 
-/**
- * Fetches a room by ID; returns null if not found.
- */
-export async function getRoomById(roomId: string): Promise<(RoomResponse & { currentVideoUrl?: string }) | null> {
+export async function getRoomById(roomId: string): Promise<(RoomResponse & { videoUrl?: string }) | null> {
   const db = getFirestore();
   const snap = await db.collection(ROOMS_COLLECTION).doc(roomId).get();
   if (!snap.exists) return null;
@@ -133,7 +139,9 @@ export async function getRoomById(roomId: string): Promise<(RoomResponse & { cur
     description: data.description,
     movieTitle: data.movieTitle,
     movieImageUrl: data.movieImageUrl,
-    currentVideoUrl: data.currentVideoUrl,
+    videoUrl: data.videoUrl,
+    progress: data.progress ?? 0,
+    isCompleted: data.isCompleted ?? false,
     createdAt,
     updatedAt,
   };
@@ -157,6 +165,9 @@ export async function getRoomsByHost(hostId: string): Promise<RoomResponse[]> {
       description: data.description,
       movieTitle: data.movieTitle,
       movieImageUrl: data.movieImageUrl,
+      videoUrl: data.videoUrl,
+      progress: data.progress ?? 0,
+      isCompleted: data.isCompleted ?? false,
       createdAt,
       updatedAt,
     };
@@ -186,26 +197,37 @@ export async function getRoomByInviteCode(inviteCode: string): Promise<RoomRespo
     description: data.description,
     movieTitle: data.movieTitle,
     movieImageUrl: data.movieImageUrl,
+    videoUrl: data.videoUrl,
+    progress: data.progress ?? 0,
+    isCompleted: data.isCompleted ?? false,
     createdAt,
     updatedAt,
   };
 }
 
 /**
- * Updates room fields (e.g. name, currentVideoUrl). Only host should call this.
+ * Updates room fields (e.g. name, videoUrl, progress, isCompleted). Only host should call this.
  */
 export async function updateRoom(
   roomId: string,
-  updates: { name?: string; description?: string; currentVideoUrl?: string }
+  updates: {
+    name?: string;
+    description?: string;
+    videoUrl?: string;
+    progress?: number;
+    isCompleted?: boolean;
+  }
 ): Promise<RoomResponse | null> {
   const db = getFirestore();
   const ref = db.collection(ROOMS_COLLECTION).doc(roomId);
   const snap = await ref.get();
   if (!snap.exists) return null;
-  const cleanUpdates: Record<string, string> = {};
+  const cleanUpdates: Record<string, string | number | boolean> = {};
   if (updates.name != null) cleanUpdates.name = updates.name;
   if (updates.description != null) cleanUpdates.description = updates.description;
-  if (updates.currentVideoUrl != null) cleanUpdates.currentVideoUrl = updates.currentVideoUrl;
+  if (updates.videoUrl != null) cleanUpdates.videoUrl = updates.videoUrl;
+  if (updates.progress != null) cleanUpdates.progress = updates.progress;
+  if (updates.isCompleted != null) cleanUpdates.isCompleted = updates.isCompleted;
   await ref.set(
     {
       ...cleanUpdates,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
@@ -14,20 +14,7 @@ export default function RoomWebViewScreen() {
   const { user, token } = useAuth();
   const [isHost, setIsHost] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [movieTitle, setMovieTitle] = useState<string | null>(null);
-  const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
-
-  const provider = useMemo(
-    () => user?.streamingProvider ?? "netflix",
-    [user?.streamingProvider]
-  );
-
-  const urlMatchesProvider = (url: string | null, p: typeof provider) => {
-    if (!url) return false;
-    if (p === "netflix") return url.includes("netflix.com");
-    if (p === "prime") return url.includes("primevideo.com");
-    return false;
-  };
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!roomId || !token) {
@@ -36,28 +23,15 @@ export default function RoomWebViewScreen() {
     }
     getRoom(roomId, token)
       .then((room) => {
-        const host = room.hostId === user?.id;
-        setIsHost(host);
-        setMovieTitle(room.movieTitle ?? null);
-        const roomUrl = room.currentVideoUrl ?? null;
-        if (roomUrl && !urlMatchesProvider(roomUrl, provider)) {
-          console.log("[RoomWebViewScreen] ignoring currentVideoUrl due to provider mismatch", {
-            roomUrl,
-            provider,
-          });
-          setCurrentVideoUrl(null);
-        } else {
-          setCurrentVideoUrl(roomUrl);
-        }
+        setIsHost(room.hostId === user?.id);
+        setVideoUrl(room.videoUrl ?? null);
         joinRoom(roomId, token).catch(() => {});
       })
       .catch((e) => {
         console.error("[RoomWebViewScreen] failed to load room", e);
       })
       .finally(() => setLoading(false));
-  }, [roomId, token, user?.id, provider]);
-
-  const onVideoUrlUpdated = (url: string) => setCurrentVideoUrl(url);
+  }, [roomId, token, user?.id]);
 
   if (!roomId || !token) {
     return null;
@@ -81,11 +55,8 @@ export default function RoomWebViewScreen() {
         <RoomWebView
           roomId={roomId}
           token={token}
-          provider={provider}
           isHost={isHost}
-          movieTitle={movieTitle}
-          initialVideoUrl={currentVideoUrl}
-          onVideoUrlUpdated={onVideoUrlUpdated}
+          videoUrl={videoUrl}
         />
       </View>
       <View style={styles.chatWrap}>
@@ -97,6 +68,12 @@ export default function RoomWebViewScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  webviewWrap: { flex: 1 },
-  chatWrap: { maxHeight: 320 },
+  webviewWrap: {
+    width: "100%",
+    height: 250,
+    backgroundColor: "#000",
+  },
+  chatWrap: {
+    flex: 1,
+  },
 });

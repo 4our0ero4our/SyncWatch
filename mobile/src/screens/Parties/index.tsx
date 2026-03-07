@@ -15,18 +15,15 @@ import Button from "@/src/components/common/Button";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/context/AuthContext";
 import { getMyRooms, getRoomByInviteCode, type Room } from "@/src/services/rooms";
-import { pastParties } from "@/src/utils/dummyData";
+import type { PartyCardProps } from "@/src/components/PartyCard/types";
 
 const tabOptions = [
   { label: "Current parties", value: "Current" },
   { label: "Past parties", value: "Ended" },
 ];
 
-/**
- * Formats a room date to a string.
- * @param isoDate - The ISO date string to format.
- * @returns The formatted date string.
- */
+type PartyCardItem = Omit<PartyCardProps, "onPress">;
+
 function formatRoomDate(isoDate: string): string {
   try {
     const d = new Date(isoDate);
@@ -40,12 +37,7 @@ function formatRoomDate(isoDate: string): string {
   }
 }
 
-/**
- * Converts a room to a party card item.
- * @param room - The room to convert.
- * @returns The party card item.
- */
-function roomToPartyCardItem(room: Room) {
+function roomToPartyCardItem(room: Room): PartyCardItem {
   return {
     id: room.id,
     title: room.name,
@@ -67,6 +59,7 @@ export default function PartiesScreen() {
   const [selectedTab, setSelectedTab] = useState("Current");
   const [modalVisible, setModalVisible] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [pastRooms, setPastRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [joinCode, setJoinCode] = useState("");
   const [joinLoading, setJoinLoading] = useState(false);
@@ -75,18 +68,32 @@ export default function PartiesScreen() {
     useCallback(() => {
       if (!token) {
         setRooms([]);
+        setPastRooms([]);
         setLoading(false);
         return;
       }
       setLoading(true);
-      getMyRooms(token)
-        .then(setRooms)
-        .catch(() => setRooms([]))
+      Promise.all([
+        getMyRooms(token, false),
+        getMyRooms(token, true),
+      ])
+        .then(([current, past]) => {
+          setRooms(current);
+          setPastRooms(past);
+        })
+        .catch(() => {
+          setRooms([]);
+          setPastRooms([]);
+        })
         .finally(() => setLoading(false));
     }, [token])
   );
 
-  const currentPartiesData = rooms.map(roomToPartyCardItem);
+  const currentPartiesData: PartyCardItem[] = rooms.map(roomToPartyCardItem);
+  const pastPartiesData: PartyCardItem[] = pastRooms.map((room) => ({
+    ...roomToPartyCardItem(room),
+    status: "Ended",
+  }));
 
   const handleCloseModal = () => {
     setModalVisible(false);
@@ -118,7 +125,7 @@ export default function PartiesScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: ReturnType<typeof roomToPartyCardItem> }) => (
+  const renderItem = ({ item }: { item: PartyCardItem }) => (
     <PartyCard
       id={item.id}
       title={item.title}
@@ -175,7 +182,7 @@ export default function PartiesScreen() {
       )}
       {selectedTab === "Ended" && (
         <FlatList
-          data={pastParties as unknown as Array<{ id: string; title: string; description: string; date: string; movieImage: any; movieTitle: string; participants: { id: string; name: string; color: string }[]; status: "Current" }>}
+          data={pastPartiesData}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -187,7 +194,7 @@ export default function PartiesScreen() {
                 weight="regular"
                 color={theme.color.textMuted}
               >
-                No {selectedTab} parties yet
+                No past parties yet
               </Typography>
             </View>
           }

@@ -1,5 +1,11 @@
 import React from "react";
-import { View, Modal, Pressable } from "react-native";
+import {
+  View,
+  Modal,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
 import { CustomModalProps } from "./types";
 import { styles } from "./styles";
 import { CloseIcon } from "@/src/assets/svgs";
@@ -18,14 +24,20 @@ const CustomModal: React.FC<CustomModalProps> = ({
     >
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={styles.modalContainer}>
-          <Pressable style={styles.closeButton} onPress={onClose}>
-            <View style={styles.closeIconWrapper}>
-              <CloseIcon />
-            </View>
-          </Pressable>
-          {children}
-        </View>
+        <KeyboardAvoidingView
+          style={{ flex: 1, justifyContent: "flex-end" }}
+          behavior="padding"
+          keyboardVerticalOffset={40}
+        >
+          <View style={styles.modalContainer}>
+            <Pressable style={styles.closeButton} onPress={onClose}>
+              <View style={styles.closeIconWrapper}>
+                <CloseIcon />
+              </View>
+            </Pressable>
+            {children}
+          </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

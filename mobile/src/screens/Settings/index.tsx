@@ -15,6 +15,7 @@ import {
 } from "@/src/assets/svgs";
 import { useRouter } from "expo-router";
 import LogoutModal from "@/src/components/LogoutModal";
+import { avatars } from "@/src/utils/dummyData";
 import { useAuth } from "@/src/context/AuthContext";
 import { logout as authLogout } from "@/src/services/auth";
 
@@ -48,15 +49,20 @@ export default function SettingsScreen() {
   const handleLogoutCancel = () => {
     setLogoutModalVisible(false);
   };
+  const getAvatarSource = (avatarKey?: string) => {
+    const id = avatarKey ? parseInt(avatarKey, 10) : NaN;
+    const fallback = avatars[0]?.url;
+    if (Number.isNaN(id)) return fallback;
+    const found = avatars.find((a) => a.id === id);
+    return found?.url ?? fallback;
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            <Image
-              source={require("../../assets/images/Avatar1.png")}
-              style={styles.avatar}
-            />
+            <Image source={getAvatarSource(user?.avatar)} style={styles.avatar} />
           </View>
           <Typography variant="subHeading" weight="semibold">
             {user?.displayName ?? "Guest"}

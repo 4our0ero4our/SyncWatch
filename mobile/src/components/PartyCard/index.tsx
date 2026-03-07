@@ -30,7 +30,7 @@ const PartyCard: React.FC<PartyCardProps> = ({
   const getStatusLabel = () => {
     switch (status) {
       case "Current":
-        return "Current";
+        return "Upcoming";
       case "Ended":
         return "Ended";
     }
@@ -61,7 +61,7 @@ const PartyCard: React.FC<PartyCardProps> = ({
           <Image
             source={movieImage}
             style={styles.poster}
-            resizeMode="contain"
+            resizeMode="cover"
           />
           <View
             style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}
@@ -78,12 +78,12 @@ const PartyCard: React.FC<PartyCardProps> = ({
 
         <View style={styles.infoContainer}>
           <View>
-            <Typography variant="body" weight="bold">
+            <Typography variant="subHeading" weight="xxBold">
               {title}
             </Typography>
             <Typography
-              variant="smallerBody"
-              weight="regular"
+              variant="smallBody"
+              weight="medium"
               color={theme.color.textMuted}
             >
               {description}

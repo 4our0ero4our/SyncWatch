@@ -1,11 +1,12 @@
 import { Room } from "@/src/services/rooms";
 
 export interface MovieProps {
-  id: number;
+  id: number | string;
   title: string;
-  image: any;
+  image: { uri: string } | number;
   rank?: string;
   description?: string;
+  embedUrl?: string;
 }
 
 export interface CreatePartyProps {

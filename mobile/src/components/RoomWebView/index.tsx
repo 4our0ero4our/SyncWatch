@@ -1,85 +1,74 @@
-import React, { useRef } from "react";
-import { View, StyleSheet, Pressable, Linking } from "react-native";
+import React, { useRef, useCallback, useState } from "react";
+import { View, StyleSheet, Text } from "react-native";
 import { useUnistyles } from "react-native-unistyles";
 import Typography from "@/src/components/common/Typography";
-import { updateRoomVideoUrl } from "@/src/services/rooms";
+import { updateRoomPlayback } from "@/src/services/rooms";
 import type { WebViewMessageEvent } from "react-native-webview";
 
 let WebView: any = null;
-
-const DESKTOP_USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36";
-
 try {
   WebView = require("react-native-webview").WebView;
 } catch {
-  // WebView native module not available (e.g. Expo Go). Use fallback.
+  // WebView native module not available (e.g. Expo Go).
 }
 
-const INJECT_PLAYER_LISTENERS = `
-(function() {
-  function attach() {
-    try {
-      var v = document.querySelector('video');
-      if (!v || v.__syncwatchHooked) return;
-      v.__syncwatchHooked = true;
-      function send(type) {
+const WEBVIEW_HEIGHT = 250;
+
+const VIMEO_EMBED_HTML = (videoId: string, showControls: boolean) => `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+  <style>
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: black; overflow: hidden; }
+    iframe { width: 100vw; height: 100vh; border: none; }
+  </style>
+</head>
+<body>
+  <iframe
+    id="vimeo-player"
+    src="https://player.vimeo.com/video/${videoId}?controls=${showControls ? 1 : 0}&title=0&byline=0&portrait=0"
+    allow="autoplay; fullscreen; picture-in-picture"
+    allowfullscreen
+  ></iframe>
+
+  <script src="https://player.vimeo.com/api/player.js"></script>
+  <script>
+    (function() {
+      var iframe = document.getElementById('vimeo-player');
+      var player = new Vimeo.Player(iframe);
+      function post(type, data) {
         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: type,
-            currentTime: v.currentTime,
-            paused: v.paused,
-            duration: v.duration,
-            url: window.location.href
-          }));
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: type, data: data || {} }));
         }
       }
-      v.addEventListener('play', function() { send('play'); });
-      v.addEventListener('pause', function() { send('pause'); });
-      v.addEventListener('seeking', function() { send('seek'); });
-      v.addEventListener('ended', function() { send('ended'); });
-    } catch (e) {}
-  }
-  document.addEventListener('readystatechange', attach);
-  setTimeout(attach, 2000);
-  setTimeout(attach, 5000);
-})();`;
-
-const STREAMING_BASE_URLS: Record<string, string> = {
-  netflix: "https://www.netflix.com",
-  prime: "https://www.primevideo.com",
-};
+      player.on('play', function() { post('play'); });
+      player.on('pause', function() { post('pause'); });
+      player.on('seeked', function() { post('seeked'); });
+      player.on('timeupdate', function(e) { post('timeupdate', { seconds: e.seconds }); });
+      player.on('ended', function() { post('ended'); });
+      player.on('error', function(e) { post('error', e); });
+    })();
+  </script>
+</body>
+</html>
+`;
 
 type RoomWebViewProps = {
   roomId: string;
   token: string;
-  provider: "netflix" | "prime";
   isHost: boolean;
-  movieTitle?: string | null;
-  initialVideoUrl?: string | null;
-  onVideoUrlUpdated?: (url: string) => void;
+  videoUrl: string | null;
+  onProgressUpdated?: (progress: number) => void;
 };
 
-function WebViewFallback({ provider }: { provider: "netflix" | "prime" }) {
+function WebViewFallback() {
   const { theme } = useUnistyles();
-  const url = STREAMING_BASE_URLS[provider] ?? STREAMING_BASE_URLS.netflix;
-
   return (
     <View style={[styles.fallback, { backgroundColor: theme.color.background }]}>
-      <Typography variant="body" weight="medium" color={theme.color.textMuted} style={{ textAlign: "center", marginBottom: 8 }}>
-        In-app streaming needs a native build. If you opened this via Expo Go, that app does not include WebView.
+      <Typography variant="body" weight="medium" color={theme.color.textMuted} style={{ textAlign: "center" }}>
+        In-app video needs a native build. Run "npx expo run:android" and open from the installed app.
       </Typography>
-        <Typography variant="smallBody" color={theme.color.textMuted} style={{ textAlign: "center", marginBottom: 16 }}>
-        Build and install once: connect your phone, run "npx expo run:android", then open this project from the installed app (not Expo Go).
-      </Typography>
-      <Pressable
-        style={[styles.openBtn, { backgroundColor: theme.color.primary }]}
-        onPress={() => Linking.openURL(url)}
-      >
-        <Typography variant="body" weight="bold" color={theme.color.white}>
-          Open {provider === "netflix" ? "Netflix" : "Prime Video"} in browser
-        </Typography>
-      </Pressable>
     </View>
   );
 }
@@ -87,143 +76,160 @@ function WebViewFallback({ provider }: { provider: "netflix" | "prime" }) {
 export default function RoomWebView({
   roomId,
   token,
-  provider,
   isHost,
-  movieTitle,
-  initialVideoUrl,
-  onVideoUrlUpdated,
+  videoUrl,
+  onProgressUpdated,
 }: RoomWebViewProps) {
   const webViewRef = useRef<any>(null);
-  const defaultUrl = STREAMING_BASE_URLS[provider] ?? STREAMING_BASE_URLS.netflix;
-  const trimmedVideoUrl = initialVideoUrl?.trim() ?? "";
-  const trimmedTitle = movieTitle?.trim() ?? "";
+  const [httpError, setHttpError] = useState<string | null>(null);
 
-  let initialUrl = defaultUrl;
+  const rawId = videoUrl?.trim() || "";
+  const cleanVideoId = String(rawId).replace(/\D/g, "");
+  const html = cleanVideoId ? VIMEO_EMBED_HTML(cleanVideoId, isHost) : null;
 
-  if (trimmedVideoUrl.length > 0) {
-    initialUrl = trimmedVideoUrl;
-  } else if (trimmedTitle.length > 0) {
-    const q = encodeURIComponent(trimmedTitle);
-    if (provider === "netflix") {
-      initialUrl = `${defaultUrl}/search?q=${q}`;
-    } else if (provider === "prime") {
-      initialUrl = `${defaultUrl}/search?phrase=${q}`;
-    }
-  }
+  console.log("[RoomWebView] render", {
+    roomId,
+    isHost,
+    videoUrl,
+    cleanVideoId,
+    hasHtml: !!html,
+  });
 
-  const handleNavigationStateChange = (navState: { url: string }) => {
-    const currentUrl = navState.url;
-    console.log("[RoomWebView] navigation", { url: currentUrl, provider, isHost });
-    if (isHost) {
-      const isNetflixWatch = currentUrl.includes("netflix.com/watch/");
-      const isPrimeWatch = currentUrl.includes("primevideo.com") && (currentUrl.includes("/watch/") || currentUrl.includes("/gp/video/"));
-      if (isNetflixWatch || isPrimeWatch) {
-        console.log("[RoomWebView] detected watch URL, saving to room");
-        updateRoomVideoUrl(roomId, currentUrl, token).then(() => {
-          onVideoUrlUpdated?.(currentUrl);
-        }).catch(() => { });
-      }
-    }
-  };
+  const reportProgress = useCallback(
+    (progress: number) => {
+      if (!isHost) return;
+      updateRoomPlayback(roomId, { progress }, token).catch(() => {});
+      onProgressUpdated?.(progress);
+    },
+    [roomId, token, isHost, onProgressUpdated]
+  );
 
-  const handleWebBack = () => {
-    webViewRef.current?.goBack?.();
-    console.log("[RoomWebView] webview goBack");
-  };
-
-  const handleSearchAgain = () => {
-    console.log("[RoomWebView] host requested search again");
-    onVideoUrlUpdated?.("");
-  };
+  const reportCompleted = useCallback(() => {
+    if (!isHost) return;
+    updateRoomPlayback(roomId, { isCompleted: true }, token).catch(() => {});
+  }, [roomId, token, isHost]);
 
   const handleMessage = (event: WebViewMessageEvent) => {
     const raw = event.nativeEvent.data;
     try {
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed.type === "string") {
-        console.log("[RoomWebView] player event", {
-          type: parsed.type,
-          currentTime: parsed.currentTime,
-          duration: parsed.duration,
-          paused: parsed.paused,
-          url: parsed.url,
-          provider,
-          isHost,
-        });
-        // TODO: host-only: write play/pause/seek state to Firebase RTDB for real-time sync
-      } else {
-        console.log("[RoomWebView] onMessage (unknown payload)", raw);
+      if (!parsed || typeof parsed.type !== "string") return;
+      const type = parsed.type as string;
+      if (type === "timeupdate" && parsed.data?.seconds != null && isHost) {
+        reportProgress(Math.floor(parsed.data.seconds));
+      }
+      if (type === "ended" && isHost) {
+        reportCompleted();
+      }
+      if (type === "error") {
+        console.warn("[RoomWebView] Vimeo player error", parsed.data);
+        setHttpError("This video cannot be played in the app. Try another one.");
       }
     } catch {
-      console.log("[RoomWebView] onMessage (non-JSON)", raw);
+      // ignore
     }
   };
 
   if (!WebView) {
-    return <WebViewFallback provider={provider} />;
+    return <WebViewFallback />;
+  }
+
+  if (!html) {
+    return (
+      <View style={[styles.placeholder, styles.webviewFixed]}>
+        <Typography variant="body" color="#666">
+          No video set or invalid video. Start a party from the lobby.
+        </Typography>
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
-      {isHost && (
-        <View style={styles.controlsBar}>
-          <Pressable style={styles.controlButton} onPress={handleWebBack}>
-            <Typography variant="smallBody" weight="medium">
-              Back
-            </Typography>
-          </Pressable>
-          <Pressable style={styles.controlButton} onPress={handleSearchAgain}>
-            <Typography variant="smallBody" weight="medium">
-              Search again
-            </Typography>
-          </Pressable>
+      {httpError && (
+        <View style={[styles.webviewFixed, styles.errorOverlay]}>
+          <Text style={styles.errorText}>{httpError}</Text>
         </View>
       )}
       <WebView
         ref={webViewRef}
-        source={{ uri: initialUrl }}
-        injectedJavaScript={INJECT_PLAYER_LISTENERS}
-        onNavigationStateChange={handleNavigationStateChange}
+        originWhitelist={["*"]}
+        source={{
+          html,
+          baseUrl: "https://vimeo.com",
+          headers: {
+            Referer: "https://vimeo.com/",
+          },
+        }}
         onMessage={handleMessage}
-        style={styles.webview}
-        javaScriptEnabled
-        domStorageEnabled
-        startInLoadingState
-        scalesPageToFit
+        style={styles.webviewFixed}
+        androidLayerType="hardware"
+        mixedContentMode="always"
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        startInLoadingState={true}
         setSupportMultipleWindows={false}
-        userAgent={provider === "netflix" ? DESKTOP_USER_AGENT : undefined}
-        allowProtectedContent={true}
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
+        onError={(event: any) => {
+          const { nativeEvent } = event;
+          console.warn("[RoomWebView] WebView error", nativeEvent);
+          setHttpError(`WebView error: ${nativeEvent?.description || "Unknown error"}`);
+        }}
+        onHttpError={(event: any) => {
+          const { nativeEvent } = event;
+          console.warn("[RoomWebView] WebView HTTP error", nativeEvent);
+          const status = nativeEvent?.statusCode;
+          const desc = nativeEvent?.description || "HTTP error";
+          setHttpError(`Video cannot be embedded (HTTP ${status} ${desc}). Try another video.`);
+        }}
+        renderError={(errorName: string) => (
+          <View style={[styles.webviewFixed, styles.errorContainer]}>
+            <Text style={styles.errorText}>WebView Error: {errorName}</Text>
+          </View>
+        )}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  webview: { flex: 1 },
-  controlsBar: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    zIndex: 10,
-    flexDirection: "row",
-    gap: 8,
+  container: { width: "100%" },
+  webviewFixed: {
+    width: "100%",
+    height: WEBVIEW_HEIGHT,
   },
-  controlButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.6)",
+  placeholder: {
+    backgroundColor: "#111",
+    justifyContent: "center",
+    alignItems: "center",
   },
   fallback: {
-    flex: 1,
+    height: WEBVIEW_HEIGHT,
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
   },
-  openBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+  errorContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#330000",
+  },
+  errorOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    backgroundColor: "rgba(0,0,0,0.7)",
+  },
+  errorText: {
+    color: "#ff5555",
+    fontSize: 14,
+    textAlign: "center",
   },
 });

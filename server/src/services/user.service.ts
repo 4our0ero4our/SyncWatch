@@ -10,10 +10,9 @@ export type UserProfileResponse = {
   streamingProvider?: StreamingProvider;
 };
 
-/**
- * Gets a user's profile by ID.
- */
-export async function getUserProfile(userId: string): Promise<UserProfileResponse | null> {
+export async function getUserProfile(
+  userId: string
+): Promise<UserProfileResponse | null> {
   const db = getFirestore();
   const snap = await db.collection(USERS_COLLECTION).doc(userId).get();
   if (!snap.exists) return null;
@@ -27,19 +26,18 @@ export async function getUserProfile(userId: string): Promise<UserProfileRespons
   };
 }
 
-/**
- * Updates a user's profile fields (currently displayName and/or streamingProvider).
- */
 export async function updateUserProfile(
   userId: string,
-  updates: { displayName?: string; streamingProvider?: StreamingProvider }
+  updates: { displayName?: string; streamingProvider?: StreamingProvider; avatar?: string }
 ): Promise<UserProfileResponse | null> {
   const db = getFirestore();
   const ref = db.collection(USERS_COLLECTION).doc(userId);
   const snap = await ref.get();
   if (!snap.exists) return null;
 
-  const payload: Partial<IUser> & { updatedAt: admin.firestore.FieldValue } = {
+  const payload: Partial<IUser> & {
+    updatedAt: admin.firestore.FieldValue;
+  } = {
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   } as any;
 
@@ -49,14 +47,14 @@ export async function updateUserProfile(
   if (updates.streamingProvider) {
     (payload as any).streamingProvider = updates.streamingProvider;
   }
+  if (typeof updates.avatar === "string") {
+    (payload as any).avatar = updates.avatar;
+  }
 
   await ref.set(payload, { merge: true });
   return getUserProfile(userId);
 }
 
-/**
- * Legacy helper: updates only the streaming provider preference.
- */
 export async function updateStreamingProvider(
   userId: string,
   streamingProvider: StreamingProvider

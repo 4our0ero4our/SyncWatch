@@ -5,12 +5,9 @@ import { logger } from "../utils/logger";
 
 export type AuthProvider = "google" | "apple";
 
-/**
- * Verifies an OAuth ID token (Google or Apple) and returns the decoded claims.
- * @param idToken - OAuth ID token from the client
- * @returns Decoded token claims or null if verification fails
- */
-export async function verifyOAuthToken(idToken: string): Promise<{ uid: string; email?: string; name?: string; picture?: string } | null> {
+export async function verifyOAuthToken(
+  idToken: string
+): Promise<{ uid: string; email?: string; name?: string; picture?: string } | null> {
   try {
     const auth = getFirebaseAuth();
     const decoded = await auth.verifyIdToken(idToken);
@@ -26,15 +23,6 @@ export async function verifyOAuthToken(idToken: string): Promise<{ uid: string; 
   }
 }
 
-/**
- * Finds or creates a user by provider and providerId, then returns a session JWT.
- * @param provider - "google" or "apple"
- * @param providerId - Firebase UID (or Apple subject)
- * @param email - User email
- * @param displayName - Display name
- * @param avatar - Optional avatar URL
- * @returns Session JWT and user document
- */
 export async function findOrCreateUserAndSign(
   provider: AuthProvider,
   providerId: string,
@@ -76,7 +64,7 @@ export async function findOrCreateUserAndSign(
       ...data,
       email,
       displayName: data.displayName || displayName,
-      avatar: avatar ?? data.avatar,
+      avatar: data.avatar ?? avatar,
       updatedAt: now,
     };
     await docRef.set(user, { merge: true });

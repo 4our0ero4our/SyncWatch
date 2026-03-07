@@ -14,7 +14,13 @@ export const Details = ({
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
       <View style={styles.posterContainer}>
-        <Image source={movie?.image} style={styles.poster} resizeMode="cover" />
+        {movie?.image && (
+          <Image
+            source={movie.image}
+            style={styles.poster}
+            resizeMode="cover"
+          />
+        )}
       </View>
       <View style={styles.content}>
         <View style={styles.rankBadge}>
@@ -26,11 +32,11 @@ export const Details = ({
               10
             </Typography>
           </View>
-          <Typography variant="smallBody" weight="bold">
+          <Typography variant="body" weight="bold">
             {movie?.title}
           </Typography>
         </View>
-        <Typography variant="smallBody" weight="regular">
+        <Typography variant="smallBody" weight="medium">
           {movie?.description}
         </Typography>
         <View style={styles.buttonContainer}>

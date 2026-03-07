@@ -2,8 +2,9 @@ import { StyleSheet } from "react-native-unistyles";
 
 export const styles = StyleSheet.create((theme) => ({
   container: {
-    maxHeight: 120,
+    borderRadius: theme.radius.l,
     overflow: "hidden",
+    backgroundColor: theme.color.backgroundLight,
   },
   containerPressed: {
     opacity: 0.8,
@@ -12,8 +13,8 @@ export const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
   },
   posterContainer: {
-    width: 200,
-    height: 120,
+    width: 180,
+    height: 112,
     position: "relative",
   },
   poster: {
@@ -43,7 +44,9 @@ export const styles = StyleSheet.create((theme) => ({
   },
   infoContainer: {
     flex: 1,
-    padding: theme.spacing.m,
+    paddingTop: theme.spacing.s,
+    paddingBottom: theme.spacing.m,
+    paddingHorizontal: theme.spacing.m,
     justifyContent: "space-between",
   },
   footer: {

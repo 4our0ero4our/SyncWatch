@@ -10,23 +10,26 @@ const createRoomSchema = Joi.object({
   description: Joi.string().trim().max(500).allow(""),
   movieTitle: Joi.string().trim().max(300).allow(""),
   movieImageUrl: Joi.string().uri().allow(""),
+  videoUrl: Joi.string().trim().max(2000).allow(""),
 });
 
 const updateRoomSchema = Joi.object({
   name: Joi.string().trim().min(1).max(200),
   description: Joi.string().trim().max(500).allow(""),
-  currentVideoUrl: Joi.string().trim().min(10).max(2000).allow(""),
+  videoUrl: Joi.string().trim().min(1).max(2000).allow(""),
+  progress: Joi.number().min(0),
+  isCompleted: Joi.boolean(),
 });
 
 export async function create(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const userId = req.userId!;
-    console.log("[room.controller] create: userId", userId);
-    const { name, description, movieTitle, movieImageUrl } = req.body as {
+    const { name, description, movieTitle, movieImageUrl, videoUrl } = req.body as {
       name: string;
       description?: string;
       movieTitle?: string;
       movieImageUrl?: string;
+      videoUrl?: string;
     };
     const room = await createRoom(
       {
@@ -34,6 +37,7 @@ export async function create(req: AuthenticatedRequest, res: Response, next: Nex
         description: description?.trim() || undefined,
         movieTitle: movieTitle?.trim() || undefined,
         movieImageUrl: movieImageUrl?.trim() || undefined,
+        videoUrl: videoUrl?.trim() || undefined,
       },
       userId
     );
@@ -46,7 +50,10 @@ export async function create(req: AuthenticatedRequest, res: Response, next: Nex
 export async function list(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const userId = req.userId!;
-    const rooms = await getRoomsByHost(userId);
+    const isCompleted = req.query.isCompleted as string | undefined;
+    let rooms = await getRoomsByHost(userId);
+    if (isCompleted === "true") rooms = rooms.filter((r) => r.isCompleted === true);
+    else if (isCompleted === "false") rooms = rooms.filter((r) => r.isCompleted === false);
     res.status(StatusCodes.OK).json(rooms);
   } catch (err) {
     next(err);
@@ -84,10 +91,13 @@ export async function getByInviteCode(req: AuthenticatedRequest, res: Response, 
 export async function update(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const roomId = req.params.id;
-    const body = req.body as { name?: string; description?: string; currentVideoUrl?: string };
-    if (body.currentVideoUrl) {
-      console.log("[room.controller] update: currentVideoUrl", body.currentVideoUrl.slice(0, 60) + "...");
-    }
+    const body = req.body as {
+      name?: string;
+      description?: string;
+      videoUrl?: string;
+      progress?: number;
+      isCompleted?: boolean;
+    };
     const room = await updateRoom(roomId, body);
     if (!room) {
       res.status(StatusCodes.NOT_FOUND).json({ error: "Room not found" });

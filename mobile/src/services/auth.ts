@@ -17,10 +17,6 @@ type BackendLoginResponse = {
   user: BackendUser;
 };
 
-/**
- * Signs the user in with Google, links it with Firebase Auth to obtain
- * a Firebase ID token, then logs in against the backend /api/auth/login route.
- */
 export async function loginWithGoogleProvider(): Promise<BackendLoginResponse> {
   console.log("[auth] loginWithGoogleProvider: start");
   try {
@@ -95,10 +91,6 @@ export async function loginWithGoogleProvider(): Promise<BackendLoginResponse> {
   }
 }
 
-/**
- * Signs out from Firebase and Google, and clears stored auth data.
- * Call this together with AuthContext.logout() to fully log the user out.
- */
 export async function logout(): Promise<void> {
   try {
     await auth().signOut();
