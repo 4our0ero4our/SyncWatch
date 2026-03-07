@@ -1,4 +1,4 @@
-export type StreamingProvider = "netflix" | "prime" | "youtube";
+export type StreamingProvider = "netflix" | "prime";
 
 export interface IUser {
   email: string;

@@ -1,6 +1,6 @@
 import { API_BASE_URL, USERS_PATH } from "@/src/config/api";
 
-export type StreamingProvider = "netflix" | "prime" | "youtube";
+export type StreamingProvider = "netflix" | "prime";
 
 export type UserProfile = {
   id: string;
@@ -9,10 +9,6 @@ export type UserProfile = {
   avatar?: string;
   streamingProvider?: StreamingProvider;
 };
-
-/**
- * Get current user's profile. Requires Authorization: Bearer <token>.
- */
 export async function getProfile(token: string): Promise<UserProfile> {
   console.log("[user] getProfile: fetching");
   const res = await fetch(`${API_BASE_URL}${USERS_PATH}/me`, {
@@ -28,9 +24,6 @@ export async function getProfile(token: string): Promise<UserProfile> {
   return data;
 }
 
-/**
- * Update current user's streaming provider. Requires Authorization: Bearer <token>.
- */
 export async function updateStreamingProvider(
   token: string,
   streamingProvider: StreamingProvider
@@ -55,7 +48,7 @@ export async function updateStreamingProvider(
 
 export async function updateProfile(
   token: string,
-  updates: Partial<Pick<UserProfile, "displayName" | "streamingProvider">>
+  updates: Partial<Pick<UserProfile, "displayName" | "streamingProvider" | "avatar">>
 ): Promise<UserProfile> {
   console.log("[user] updateProfile:", updates);
   const res = await fetch(`${API_BASE_URL}${USERS_PATH}/me`, {

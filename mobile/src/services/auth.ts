@@ -9,7 +9,7 @@ type BackendUser = {
   email: string;
   displayName: string;
   avatar?: string;
-  streamingProvider?: "netflix" | "prime" | "youtube";
+  streamingProvider?: "netflix" | "prime";
 };
 
 type BackendLoginResponse = {
@@ -17,10 +17,6 @@ type BackendLoginResponse = {
   user: BackendUser;
 };
 
-/**
- * Signs the user in with Google, links it with Firebase Auth to obtain
- * a Firebase ID token, then logs in against the backend /api/auth/login route.
- */
 export async function loginWithGoogleProvider(): Promise<BackendLoginResponse> {
   console.log("[auth] loginWithGoogleProvider: start");
   try {
@@ -54,17 +50,28 @@ export async function loginWithGoogleProvider(): Promise<BackendLoginResponse> {
     const firebaseIdToken = await userCredential.user.getIdToken();
     console.log("[auth] Firebase ID token (truncated):", firebaseIdToken.slice(0, 20), "...");
 
-    console.log("[auth] Calling backend login endpoint:", `${API_BASE_URL}${AUTH_LOGIN_PATH}`);
-    const res = await fetch(`${API_BASE_URL}${AUTH_LOGIN_PATH}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        idToken: firebaseIdToken,
-        provider: "google",
-      }),
-    });
+    const loginUrl = `${API_BASE_URL}${AUTH_LOGIN_PATH}`;
+    console.log("[auth] Calling backend login endpoint:", loginUrl);
+    let res: Response;
+    try {
+      res = await fetch(loginUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          idToken: firebaseIdToken,
+          provider: "google",
+        }),
+      });
+    } catch (fetchErr: any) {
+      if (fetchErr?.message === "Network request failed") {
+        throw new Error(
+          "Cannot reach the server. Ensure your phone and computer are on the same Wi‑Fi, the backend is running, and EXPO_PUBLIC_API_URL is your computer's IP (e.g. http://192.168.x.x:8000)."
+        );
+      }
+      throw fetchErr;
+    }
 
     console.log("[auth] Backend response status:", res.status, res.statusText);
     if (!res.ok) {
@@ -84,10 +91,6 @@ export async function loginWithGoogleProvider(): Promise<BackendLoginResponse> {
   }
 }
 
-/**
- * Signs out from Firebase and Google, and clears stored auth data.
- * Call this together with AuthContext.logout() to fully log the user out.
- */
 export async function logout(): Promise<void> {
   try {
     await auth().signOut();

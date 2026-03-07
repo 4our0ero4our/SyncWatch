@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useRouter } from "expo-router";
 import { StyleSheet } from "react-native-unistyles";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -17,7 +17,13 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const { user, token, login } = useAuth();
 
-  const [selectedAvatar, setSelectedAvatar] = useState(1);
+  const initialAvatarId = useMemo(() => {
+    if (!user?.avatar) return 1;
+    const parsed = parseInt(user.avatar, 10);
+    return Number.isNaN(parsed) ? 1 : parsed;
+  }, [user?.avatar]);
+
+  const [selectedAvatar, setSelectedAvatar] = useState(initialAvatarId);
   const [name, setName] = useState(user?.displayName ?? "");
   const email = user?.email ?? "";
   const [saving, setSaving] = useState(false);
@@ -28,15 +34,33 @@ export default function EditProfileScreen() {
       return;
     }
     const trimmed = name.trim();
-    if (!trimmed || trimmed === user.displayName) {
+    const updates: { displayName?: string; avatar?: string } = {};
+    if (trimmed && trimmed !== user.displayName) {
+      updates.displayName = trimmed;
+    }
+    const currentAvatarId = user.avatar ? parseInt(user.avatar, 10) : undefined;
+    if (!Number.isNaN(selectedAvatar) && selectedAvatar !== currentAvatarId) {
+      updates.avatar = String(selectedAvatar);
+    }
+    if (!updates.displayName && !updates.avatar) {
       router.back();
       return;
     }
     try {
       setSaving(true);
-      const updated = await updateProfile(token, { displayName: trimmed });
-      login({ user: { ...user, displayName: updated.displayName }, token });
-      console.log("[EditProfileScreen] displayName updated:", updated.displayName);
+      const updated = await updateProfile(token, updates);
+      login({
+        user: {
+          ...user,
+          displayName: updated.displayName,
+          avatar: updated.avatar,
+        },
+        token,
+      });
+      console.log("[EditProfileScreen] profile updated:", {
+        displayName: updated.displayName,
+        avatar: updated.avatar,
+      });
       router.back();
     } catch (e: any) {
       console.error("[EditProfileScreen] handleSave error:", e);

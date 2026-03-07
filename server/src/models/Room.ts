@@ -1,6 +1,6 @@
 /**
- * Room document: watch room metadata and current video URL.
- * Real-time playback state (play/pause/timestamp) lives in Firebase RTDB.
+ * Room document: watch room metadata, Vimeo video, and playback state.
+ * Real-time playback sync can use Firebase RTDB separately.
  */
 export interface IRoom {
   name: string;
@@ -9,7 +9,9 @@ export interface IRoom {
   description?: string;
   movieTitle?: string;
   movieImageUrl?: string;
-  currentVideoUrl?: string;
+  videoUrl?: string;
+  progress?: number;
+  isCompleted?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

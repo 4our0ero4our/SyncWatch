@@ -22,6 +22,7 @@ export const styles = StyleSheet.create((theme, rt) => ({
   },
   row: {
     justifyContent: "space-between",
+    columnGap: theme.spacing.s,
     marginBottom: theme.spacing.m,
   },
   loadingContainer: {

@@ -6,8 +6,9 @@ import { getUserProfile, updateUserProfile } from "../services/user.service";
 import { validateBody } from "../middlewares/validateBody";
 
 const updateUserSchema = Joi.object({
-  streamingProvider: Joi.string().valid("netflix", "prime", "youtube"),
+  streamingProvider: Joi.string().valid("netflix", "prime"),
   displayName: Joi.string().trim().min(1).max(100),
+  avatar: Joi.string().trim().max(100),
 }).min(1);
 
 export async function getMe(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -28,10 +29,15 @@ export async function getMe(req: AuthenticatedRequest, res: Response, next: Next
 export async function updateMe(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const userId = req.userId!;
-    const { streamingProvider, displayName } = req.body as { streamingProvider?: string; displayName?: string };
+    const { streamingProvider, displayName, avatar } = req.body as {
+      streamingProvider?: string;
+      displayName?: string;
+      avatar?: string;
+    };
     const profile = await updateUserProfile(userId, {
-      streamingProvider: streamingProvider as "netflix" | "prime" | "youtube" | undefined,
+      streamingProvider: streamingProvider as "netflix" | "prime" | undefined,
       displayName,
+      avatar,
     });
     if (!profile) {
       res.status(StatusCodes.NOT_FOUND).json({ error: "User not found" });

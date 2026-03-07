@@ -8,7 +8,9 @@ export type Room = {
   description?: string;
   movieTitle?: string;
   movieImageUrl?: string;
-  currentVideoUrl?: string;
+  videoUrl?: string;
+  progress?: number;
+  isCompleted?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -18,6 +20,7 @@ export type CreateRoomPayload = {
   description?: string;
   movieTitle?: string;
   movieImageUrl?: string;
+  videoUrl?: string;
 };
 
 export async function createRoom(
@@ -39,8 +42,9 @@ export async function createRoom(
   return res.json() as Promise<Room>;
 }
 
-export async function getMyRooms(token: string): Promise<Room[]> {
-  const res = await fetch(`${API_BASE_URL}${ROOMS_PATH}`, {
+export async function getMyRooms(token: string, isCompleted?: boolean): Promise<Room[]> {
+  const query = isCompleted !== undefined ? `?isCompleted=${isCompleted}` : "";
+  const res = await fetch(`${API_BASE_URL}${ROOMS_PATH}${query}`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -78,9 +82,9 @@ export async function getRoom(roomId: string, token: string): Promise<Room> {
   return res.json() as Promise<Room>;
 }
 
-export async function updateRoomVideoUrl(
+export async function updateRoomPlayback(
   roomId: string,
-  currentVideoUrl: string,
+  updates: { videoUrl?: string; progress?: number; isCompleted?: boolean },
   token: string
 ): Promise<Room> {
   const res = await fetch(`${API_BASE_URL}${ROOMS_PATH}/${roomId}`, {
@@ -89,13 +93,21 @@ export async function updateRoomVideoUrl(
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ currentVideoUrl }),
+    body: JSON.stringify(updates),
   });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `Update room failed: ${res.status}`);
   }
   return (await res.json()) as Room;
+}
+
+export async function updateRoomVideoUrl(
+  roomId: string,
+  videoUrl: string,
+  token: string
+): Promise<Room> {
+  return updateRoomPlayback(roomId, { videoUrl }, token);
 }
 
 export async function getRoomByInviteCode(

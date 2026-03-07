@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Image, ScrollView } from "react-native";
+import { View, Image, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 
 import { styles } from "../styles";
 import Typography from "@/src/components/common/Typography";
@@ -42,14 +42,20 @@ export const Form = ({
   };
 
   return (
-    <ScrollView>
-      <View style={styles.description}>
+    <KeyboardAvoidingView
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 24}
+    >
+      <ScrollView keyboardShouldPersistTaps="handled">
+        <View style={styles.description}>
         <View style={styles.banner}>
-          <Image
-            resizeMode="cover"
-            source={movie?.image}
-            style={styles.bannerImg}
-          />
+          {movie?.image && (
+            <Image
+              resizeMode="cover"
+              source={movie.image}
+              style={styles.bannerImg}
+            />
+          )}
         </View>
         <View>
           <Typography variant="body" weight="regular">
@@ -59,8 +65,8 @@ export const Form = ({
             {movie?.title}
           </Typography>
         </View>
-      </View>
-      <View style={styles.formContainer}>
+        </View>
+        <View style={styles.formContainer}>
         <Input
           placeholder="Enter a name"
           label="Set party name"
@@ -80,14 +86,15 @@ export const Form = ({
             {error}
           </Typography>
         ) : null}
-        <Button
-          onPress={handleGenerateInvite}
-          title="generate invite"
-          disabled={loading}
-        >
-          {loading ? "Creating..." : "Generate invite"}
-        </Button>
-      </View>
-    </ScrollView>
+          <Button
+            onPress={handleGenerateInvite}
+            title="generate invite"
+            disabled={loading}
+          >
+            {loading ? "Creating..." : "Generate invite"}
+          </Button>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };

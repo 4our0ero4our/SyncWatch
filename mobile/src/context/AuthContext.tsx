@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 
-export type StreamingProvider = "netflix" | "prime" | "youtube";
+export type StreamingProvider = "netflix" | "prime";
 
 export type AuthUser = {
   id: string;

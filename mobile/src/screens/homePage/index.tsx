@@ -28,12 +28,25 @@ import { useAuth } from "@/src/context/AuthContext";
 import { useUnistyles } from "react-native-unistyles";
 import AlertModal from "@/src/components/AlertModal";
 
+function vimeoToMovieProps(v: { id: string; title: string; thumbnailUri: string; description: string; embedUrl: string }): MovieProps {
+  return {
+    id: v.id,
+    title: v.title,
+    image: v.thumbnailUri ? { uri: v.thumbnailUri } : require("@/src/assets/images/image1.jpg"),
+    description: v.description || undefined,
+    embedUrl: v.embedUrl,
+  };
+}
+
 function Home() {
   const { theme } = useUnistyles();
   const [stage, setStage] = useState<Stages>("details");
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<MovieProps | null>(null);
   const [movies, setMovies] = useState<MovieProps[]>([]);
+  const [page, setPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -58,22 +71,23 @@ function Home() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchPopularMoviesForProvider(user?.streamingProvider)
+    fetchVimeoVideosHomepage(1, 20)
       .then((list) => {
-        if (!cancelled) setMovies(list);
+        if (!cancelled) {
+          const mapped = list.map(vimeoToMovieProps);
+          setMovies(mapped);
+          setPage(1);
+          setHasMore(mapped.length > 0);
+        }
       })
       .catch((e) => {
-        if (!cancelled) setError(e?.message ?? "Failed to load movies");
+        if (!cancelled) setError(e?.message ?? "Failed to load videos");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.streamingProvider]);
+  }, []);
 
-  // Debounced search
   useEffect(() => {
     const trimmed = searchQuery.trim();
     if (!trimmed) {
@@ -84,9 +98,9 @@ function Home() {
     setSearchLoading(true);
     let cancelled = false;
     const timer = setTimeout(() => {
-      fetchSearchMovies(trimmed)
+      searchVimeoVideos(trimmed, 1, 20)
         .then((list) => {
-          if (!cancelled) setSearchResults(list);
+          if (!cancelled) setSearchResults(list.map(vimeoToMovieProps));
         })
         .catch(() => {
           if (!cancelled) setSearchResults([]);
@@ -166,9 +180,6 @@ function Home() {
     }
   };
 
-  /**
-   * Handles the create party event.
-   */
   const handleCreateParty = () => {
     if (stage === "details") {
       setStage("form");
@@ -177,11 +188,6 @@ function Home() {
     }
   };
 
-  /**
-   * Gets the movie image URL.
-   * @param movie - The movie to get the image URL for.
-   * @returns The movie image URL.
-   */
   const getMovieImageUrl = (movie: MovieProps | null): string | undefined => {
     if (!movie?.image) return undefined;
     if (
@@ -195,42 +201,54 @@ function Home() {
   };
 
   const handleCreateRoom = async (name: string, description: string) => {
-    console.log("[Home] handleCreateRoom", { name, description });
     if (!token) throw new Error("You must be logged in to create a party.");
+    const videoUrl = selectedMovie?.embedUrl;
     const room = await createRoom(
       {
         name,
         description: description || undefined,
         movieTitle: selectedMovie?.title,
         movieImageUrl: getMovieImageUrl(selectedMovie),
+        videoUrl: videoUrl || undefined,
       },
       token,
     );
-    console.log("[Home] handleCreateRoom: success", room.id, room.inviteCode);
     setCreatedRoom(room);
     setStage("success");
   };
 
-  const renderItem = ({ item }: { item: MovieProps }) => {
-    const isChecking = checkingMovieId === item.id;
-    return (
-      <Pressable
-        style={[styles.movieCard, isChecking && styles.movieCardDisabled]}
-        onPress={() => handleMoviePress(item)}
-        disabled={checkingMovieId !== null}
-      >
-        <Image
-          source={item.image}
-          style={styles.movieImage}
-          resizeMode="cover"
-        />
-        {isChecking && (
-          <View style={styles.movieCardOverlay}>
-            <ActivityIndicator size="small" color="#fff" />
-          </View>
-        )}
-      </Pressable>
-    );
+  const renderItem = ({ item }: { item: MovieProps }) => (
+    <Pressable
+      style={styles.movieCard}
+      onPress={() => handleMoviePress(item)}
+    >
+      <Image
+        source={typeof item.image === "object" && "uri" in item.image ? item.image : require("@/src/assets/images/image1.jpg")}
+        style={styles.movieImage}
+        resizeMode="cover"
+      />
+    </Pressable>
+  );
+
+  const handleLoadMore = () => {
+    if (isSearchActive || loadingMore || !hasMore || loading) return;
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    fetchVimeoVideosHomepage(nextPage, 20)
+      .then((list) => {
+        const mapped = list.map(vimeoToMovieProps);
+        if (mapped.length === 0) {
+          setHasMore(false);
+          return;
+        }
+        setMovies((prev) => [...prev, ...mapped]);
+        setPage(nextPage);
+      })
+      .catch(() => {
+        // keep previous data, just stop endless loading on error
+        setHasMore(false);
+      })
+      .finally(() => setLoadingMore(false));
   };
 
   if (loading) {
@@ -309,7 +327,7 @@ function Home() {
                   weight="medium"
                   style={styles.emptyStateTitle}
                 >
-                  No movies found
+                  No videos found
                 </Typography>
                 <Typography
                   variant="smallBody"
@@ -317,18 +335,27 @@ function Home() {
                   color={theme.color.textMuted}
                   style={styles.emptyStateMessage}
                 >
-                  Try a different search term or check the spelling.
+                  Try a different search term.
                 </Typography>
               </View>
             ) : (
               <FlatList
                 data={displayMovies}
                 renderItem={renderItem}
-                keyExtractor={(item) => item.id.toString()}
+                keyExtractor={(item) => String(item.id)}
                 numColumns={2}
                 contentContainerStyle={styles.gridContent}
                 columnWrapperStyle={styles.row}
                 showsVerticalScrollIndicator={false}
+                onEndReached={handleLoadMore}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                  !isSearchActive && loadingMore ? (
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="small" color="#E50914" />
+                    </View>
+                  ) : null
+                }
               />
             )}
           </>

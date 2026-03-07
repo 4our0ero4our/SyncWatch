@@ -9,11 +9,6 @@ const authBodySchema = Joi.object({
   provider: Joi.string().valid("google", "apple").required(),
 });
 
-/**
- * POST /api/auth/login
- * Body: { idToken, provider: "google" | "apple" }
- * Returns: { token, user: { id, email, displayName, avatar } }
- */
 export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { idToken, provider } = req.body as { idToken: string; provider: AuthProvider };
@@ -35,11 +30,6 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
   }
 }
 
-/**
- * POST /api/auth/refresh
- * Body: none; expects Authorization: Bearer <current JWT>
- * Returns: { token, user } with new JWT (optional; can be implemented later)
- */
 export async function refresh(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const authReq = req as import("../middlewares/requireAuth").AuthenticatedRequest;

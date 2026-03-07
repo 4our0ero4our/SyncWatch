@@ -6,7 +6,6 @@ import {
   PrimeLogo,
 } from "../assets/svgs";
 import { selectProviderType } from "./types";
-import Typography from "@/src/components/common/Typography";
 import { MovieProps } from "../screens/homePage/CreateParty/types";
 
 export const onboardingData: SlideData[] = [
@@ -37,12 +36,6 @@ export const selectProviderData: selectProviderType[] = [
     logo: <PrimeLogo />,
     title: "Prime Video",
     providerId: "prime",
-  },
-  {
-    id: 3,
-    logo: <Typography variant="body" weight="bold">YT</Typography>,
-    title: "YouTube",
-    providerId: "youtube",
   },
 ];
 

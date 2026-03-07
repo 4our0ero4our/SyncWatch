@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActivityIndicator, View } from "react-native";
@@ -61,9 +61,7 @@ export default function RoomWebViewScreen() {
         console.error("[RoomWebViewScreen] failed to load room", e);
       })
       .finally(() => setLoading(false));
-  }, [roomId, token, user?.id, provider]);
-
-  const onVideoUrlUpdated = (url: string) => setCurrentVideoUrl(url);
+  }, [roomId, token, user?.id]);
 
   if (!roomId || !token) {
     return null;
@@ -89,11 +87,8 @@ export default function RoomWebViewScreen() {
         <RoomWebView
           roomId={roomId}
           token={token}
-          provider={provider}
           isHost={isHost}
-          movieTitle={movieTitle}
-          initialVideoUrl={currentVideoUrl}
-          onVideoUrlUpdated={onVideoUrlUpdated}
+          videoUrl={videoUrl}
         />
       </View>
       <View style={styles.chatWrap}>
