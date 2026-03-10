@@ -1,4 +1,4 @@
-import {StyleSheet} from 'react-native-unistyles'
+import { StyleSheet } from "react-native-unistyles";
 
 export const styles = StyleSheet.create((theme, rt) => ({
   container: {
@@ -59,10 +59,11 @@ export const styles = StyleSheet.create((theme, rt) => ({
     textAlign: "center",
   },
   movieCard: {
-    flex: 1,
-    aspectRatio: 16 / 9,
-    // borderRadius: theme.radius.xs,
-    // overflow: "hidden",
+    height: 100,
+    width: 190,
+    borderRadius: theme.radius.m,
+    resizeMode: "contain",
+    overflow: "hidden",
   },
   movieCardDisabled: {
     opacity: 0.7,

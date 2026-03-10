@@ -20,6 +20,7 @@ export const styles = StyleSheet.create((theme) => ({
   poster: {
     width: "100%",
     height: "100%",
+    resizeMode: "contain",
     borderRadius: 10,
   },
   statusBadge: {

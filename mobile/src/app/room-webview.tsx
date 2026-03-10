@@ -1,22 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ActivityIndicator, View, StyleSheet, StatusBar } from "react-native";
+import { ActivityIndicator, View } from "react-native";
+import StackHeader from "@/src/components/StackHeader";
 import RoomWebView from "@/src/components/RoomWebView";
 import RoomChat from "@/src/components/RoomChat";
 import { useAuth } from "@/src/context/AuthContext";
-import { getRoom, joinRoom, updateRoomPlayback } from "@/src/services/rooms";
-
-const ROOM_POLL_INTERVAL_MS = 3000;
-const WATCH_ROOM_BG = "#0a0a0a";
-
-function normalizeYouTubeVideoId(value: string | undefined | null): string | null {
-  if (!value || typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (trimmed.length >= 11 && /^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed;
-  const match = trimmed.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  return match ? match[1] : null;
-}
+import { getRoom, joinRoom } from "@/src/services/rooms";
+import { StyleSheet } from "react-native-unistyles";
 
 export default function RoomWebViewScreen() {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
@@ -24,31 +15,22 @@ export default function RoomWebViewScreen() {
   const { user, token } = useAuth();
   const [isHost, setIsHost] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [videoId, setVideoId] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [roomName, setRoomName] = useState("");
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isHostRef = useRef(false);
+  const [movieTitle, setMovieTitle] = useState<string | null>(null);
+  const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
 
-  const setPlayingFromHost = useCallback((value: boolean) => {
-    setIsPlaying(value);
-  }, []);
+  const provider = useMemo(
+    () => user?.streamingProvider ?? "netflix",
+    [user?.streamingProvider],
+  );
 
-  const fetchRoom = useCallback(() => {
-    if (!roomId || !token) return;
-    getRoom(roomId, token)
-      .then((room) => {
-        isHostRef.current = room.hostId === user?.id;
-        setIsHost(isHostRef.current);
-        const id = room.videoId ?? normalizeYouTubeVideoId(room.videoUrl) ?? null;
-        setVideoId(id);
-        setIsPlaying(room.isPlaying ?? false);
-        setProgress(room.progress ?? 0);
-        setRoomName(room.name || "Watch Party");
-      })
-      .catch(() => {});
-  }, [roomId, token, user?.id]);
+  const urlMatchesProvider = (url: string | null, p: typeof provider) => {
+    if (!url) return false;
+    if (p === "netflix") return url.includes("netflix.com");
+    if (p === "prime") return url.includes("primevideo.com");
+    if (p === "youtube")
+      return url.includes("youtube.com") || url.includes("youtu.be");
+    return false;
+  };
 
   useEffect(() => {
     if (!roomId || !token) {
@@ -57,13 +39,22 @@ export default function RoomWebViewScreen() {
     }
     getRoom(roomId, token)
       .then((room) => {
-        isHostRef.current = room.hostId === user?.id;
-        setIsHost(isHostRef.current);
-        const id = room.videoId ?? normalizeYouTubeVideoId(room.videoUrl) ?? null;
-        setVideoId(id);
-        setIsPlaying(room.isPlaying ?? false);
-        setProgress(room.progress ?? 0);
-        setRoomName(room.name || "Watch Party");
+        const host = room.hostId === user?.id;
+        setIsHost(host);
+        setMovieTitle(room.movieTitle ?? null);
+        const roomUrl = room.currentVideoUrl ?? null;
+        if (roomUrl && !urlMatchesProvider(roomUrl, provider)) {
+          console.log(
+            "[RoomWebViewScreen] ignoring currentVideoUrl due to provider mismatch",
+            {
+              roomUrl,
+              provider,
+            },
+          );
+          setCurrentVideoUrl(null);
+        } else {
+          setCurrentVideoUrl(roomUrl);
+        }
         joinRoom(roomId, token).catch(() => {});
       })
       .catch((e) => {
@@ -107,9 +98,11 @@ export default function RoomWebViewScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: WATCH_ROOM_BG }]} edges={["top", "bottom"]}>
-        <StatusBar barStyle="light-content" backgroundColor={WATCH_ROOM_BG} />
-        <View style={styles.loadingCenter}>
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+        <StackHeader handleBack={() => router.back()} title="Watch Party" />
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
           <ActivityIndicator size="large" color="#E50914" />
         </View>
       </SafeAreaView>
@@ -138,16 +131,8 @@ export default function RoomWebViewScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingCenter: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  chatWrap: {
-    flex: 1,
-  },
-});
+export const styles = StyleSheet.create((theme, rt) => ({
+  container: { flex: 1, backgroundColor: theme.color.background },
+  webviewWrap: { flex: 1 },
+  chatWrap: { maxHeight: 320 },
+}));

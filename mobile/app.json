@@ -50,9 +50,16 @@
       [
         "expo-font",
         {
-          "fonts": [
-            "node_modules/@expo-google-fonts/dm-sans/"
-          ]
+          "fonts": ["node_modules/@expo-google-fonts/dm-sans/"]
+        }
+      ],
+      "@react-native-firebase/app",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
         }
       ]
     ],
