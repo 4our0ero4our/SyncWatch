@@ -7,12 +7,23 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { useUnistyles } from "react-native-unistyles";
 import Typography from "@/src/components/common/Typography";
 import { getMessages, sendMessage, type ChatMessage } from "@/src/services/chat";
+import { getParticipants, type RoomParticipant } from "@/src/services/rooms";
+import { avatars } from "@/src/utils/dummyData";
 
 const REACTIONS = ["👍", "😂", "❤️", "😮", "😢", "🔥"];
+
+function getAvatarSource(avatarKey?: string) {
+  const id = avatarKey ? parseInt(avatarKey, 10) : NaN;
+  const fallback = avatars[0]?.url;
+  if (Number.isNaN(id)) return fallback;
+  const found = avatars.find((a) => a.id === id);
+  return found?.url ?? fallback;
+}
 
 type RoomChatProps = {
   roomId: string;
@@ -22,6 +33,7 @@ type RoomChatProps = {
 export default function RoomChat({ roomId, token }: RoomChatProps) {
   const { theme } = useUnistyles();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -36,11 +48,24 @@ export default function RoomChat({ roomId, token }: RoomChatProps) {
     }
   }, [roomId, token]);
 
+  const fetchParticipants = useCallback(async () => {
+    try {
+      const list = await getParticipants(roomId, token);
+      setParticipants(list);
+    } catch {
+      // ignore
+    }
+  }, [roomId, token]);
+
   useEffect(() => {
     fetchMessages();
-    const interval = setInterval(fetchMessages, 5000);
+    fetchParticipants();
+    const interval = setInterval(() => {
+      fetchMessages();
+      fetchParticipants();
+    }, 5000);
     return () => clearInterval(interval);
-  }, [fetchMessages]);
+  }, [fetchMessages, fetchParticipants]);
 
   const handleSendText = async () => {
     const text = input.trim();
@@ -63,51 +88,82 @@ export default function RoomChat({ roomId, token }: RoomChatProps) {
     }
   };
 
-  const renderItem = ({ item }: { item: ChatMessage }) => (
-    <View style={styles.messageRow}>
-      {item.type === "text" ? (
-        <Typography variant="smallBody" weight="regular">
-          <Typography variant="caption" weight="medium" color={theme.color.textMuted}>
-            {item.userId.slice(0, 8)}…
-          </Typography>{" "}
-          {item.content}
-        </Typography>
-      ) : (
-        <Typography variant="smallBody" weight="medium">
-          <Typography variant="caption" weight="medium" color={theme.color.textMuted}>
-            {item.userId.slice(0, 8)}…
-          </Typography>{" "}
-          reacted {item.content}
-        </Typography>
-      )}
-    </View>
-  );
+  const renderItem = ({ item }: { item: ChatMessage }) => {
+    const displayName = item.displayName ?? item.userId.slice(0, 12) + (item.userId.length > 12 ? "…" : "");
+    const avatarSource = getAvatarSource(item.avatar);
+    return (
+      <View style={styles.messageRow}>
+        <Image source={avatarSource} style={styles.messageAvatar} />
+        <View style={styles.messageBubble}>
+          {item.type === "text" ? (
+            <Typography variant="smallBody" weight="regular">
+              <Typography variant="caption" weight="medium" color={theme.color.textMuted}>
+                {displayName}
+              </Typography>{" "}
+              {item.content}
+            </Typography>
+          ) : (
+            <Typography variant="smallBody" weight="medium">
+              <Typography variant="caption" weight="medium" color={theme.color.textMuted}>
+                {displayName}
+              </Typography>{" "}
+              reacted {item.content}
+            </Typography>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const visibleParticipants = participants.slice(0, 4);
+  const extraCount = participants.length - visibleParticipants.length;
 
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.color.backgroundLight }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={80}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: "rgba(255,255,255,0.1)" }]}>
         <Typography variant="body" weight="bold">
-          Chat
+          Live Messages
         </Typography>
+        <View style={styles.participantAvatars}>
+          {visibleParticipants.map((p, index) => (
+            <View
+              key={p.userId}
+              style={[
+                styles.participantAvatarWrap,
+                { backgroundColor: theme.color.primary, marginLeft: index > 0 ? -8 : 0, zIndex: visibleParticipants.length - index },
+              ]}
+            >
+              <Image source={getAvatarSource(p.avatar)} style={styles.participantAvatar} />
+            </View>
+          ))}
+          {extraCount > 0 && (
+            <View style={[styles.participantAvatarWrap, styles.extraAvatar, { marginLeft: -8, zIndex: 0 }]}>
+              <Typography variant="caption" weight="medium" color={theme.color.background}>
+                +{extraCount}
+              </Typography>
+            </View>
+          )}
+        </View>
       </View>
       <FlatList
         data={messages}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, messages.length === 0 && styles.listEmpty]}
+        keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
           loading ? null : (
-            <Typography variant="smallBody" color={theme.color.textMuted}>
-              No messages yet. Say hi!
+            <Typography variant="smallBody" color={theme.color.textMuted} style={styles.emptyText}>
+              No messages has been sent yet.
             </Typography>
           )
         }
       />
-      <View style={styles.reactions}>
+      <View style={[styles.reactions, { backgroundColor: theme.color.backgroundLight }]}>
         {REACTIONS.map((emoji) => (
           <Pressable
             key={emoji}
@@ -121,7 +177,7 @@ export default function RoomChat({ roomId, token }: RoomChatProps) {
       <View style={[styles.inputRow, { backgroundColor: theme.color.background }]}>
         <TextInput
           style={[styles.input, { color: theme.color.white }]}
-          placeholder="Type a message..."
+          placeholder="Send a message"
           placeholderTextColor={theme.color.gray02}
           value={input}
           onChangeText={setInput}
@@ -144,22 +200,64 @@ export default function RoomChat({ roomId, token }: RoomChatProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    maxHeight: 320,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
+    minHeight: 200,
   },
   header: {
-    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
+  },
+  participantAvatars: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  participantAvatarWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  participantAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  extraAvatar: {
+    minWidth: 28,
+    paddingHorizontal: 4,
   },
   list: {
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     flexGrow: 1,
-    minHeight: 120,
+  },
+  listEmpty: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
+  emptyText: {
+    textAlign: "center",
   },
   messageRow: {
-    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  messageAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 10,
+  },
+  messageBubble: {
+    flex: 1,
   },
   reactions: {
     flexDirection: "row",

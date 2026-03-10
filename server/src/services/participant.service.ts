@@ -2,13 +2,8 @@ import { getFirestore } from "../config/firebase";
 import { ROOMS_COLLECTION, IRoom } from "../models/Room";
 import { PARTICIPANTS_SUBCOLLECTION, ParticipantRole } from "../models/Participant";
 import admin from "firebase-admin";
+import { getUserProfile } from "./user.service";
 
-/**
- * Adds a user as a viewer to a room. Fails if already in room or room does not exist.
- * @param roomId - Room ID
- * @param userId - User ID joining
- * @returns Created participant or null if room missing / already joined
- */
 export async function joinRoom(
   roomId: string,
   userId: string
@@ -39,12 +34,6 @@ export async function joinRoom(
   return { roomId, userId, role: "viewer" };
 }
 
-/**
- * Removes a participant from a room. Host can kick anyone; users can leave themselves.
- * @param roomId - Room ID
- * @param userId - User ID to remove (or self for leave)
- * @param actorId - User ID performing the action (must be host to kick others)
- */
 export async function removeParticipant(roomId: string, userId: string, actorId: string): Promise<boolean> {
   const db = getFirestore();
   const roomRef = db.collection(ROOMS_COLLECTION).doc(roomId);
@@ -56,7 +45,6 @@ export async function removeParticipant(roomId: string, userId: string, actorId:
   const isSelf = userId === actorId;
   if (!actorIsHost && !isSelf) return false;
 
-  // Prevent removing the host without a transfer flow.
   if (room.hostId === userId) return false;
 
   const participantRef = roomRef.collection(PARTICIPANTS_SUBCOLLECTION).doc(userId);
@@ -66,22 +54,31 @@ export async function removeParticipant(roomId: string, userId: string, actorId:
   return true;
 }
 
-/**
- * Lists participants in a room with user details.
- */
-export async function listParticipants(roomId: string): Promise<Array<{ userId: string; role: ParticipantRole }>> {
+export async function listParticipants(
+  roomId: string
+): Promise<Array<{ userId: string; role: ParticipantRole; displayName?: string; avatar?: string }>> {
   const db = getFirestore();
   const roomRef = db.collection(ROOMS_COLLECTION).doc(roomId);
   const snaps = await roomRef.collection(PARTICIPANTS_SUBCOLLECTION).get();
-  return snaps.docs.map((d) => {
-    const data = d.data() as { role?: ParticipantRole };
-    return { userId: d.id, role: data.role ?? "viewer" };
-  });
+  const list = await Promise.all(
+    snaps.docs.map(async (d) => {
+      const data = d.data() as { role?: ParticipantRole };
+      const role = data.role ?? "viewer";
+      let displayName: string | undefined;
+      let avatar: string | undefined;
+      try {
+        const p = await getUserProfile(d.id);
+        displayName = p?.displayName;
+        avatar = p?.avatar;
+      } catch {
+        // ignore
+      }
+      return { userId: d.id, role, displayName, avatar };
+    })
+  );
+  return list;
 }
 
-/**
- * Checks if the given user is the host of the room.
- */
 export async function isHost(roomId: string, userId: string): Promise<boolean> {
   const db = getFirestore();
   const snap = await db.collection(ROOMS_COLLECTION).doc(roomId).get();

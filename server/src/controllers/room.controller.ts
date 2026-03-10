@@ -11,6 +11,7 @@ const createRoomSchema = Joi.object({
   movieTitle: Joi.string().trim().max(300).allow(""),
   movieImageUrl: Joi.string().uri().allow(""),
   videoUrl: Joi.string().trim().max(2000).allow(""),
+  videoId: Joi.string().trim().max(50).allow(""),
 });
 
 const updateRoomSchema = Joi.object({
@@ -18,18 +19,20 @@ const updateRoomSchema = Joi.object({
   description: Joi.string().trim().max(500).allow(""),
   videoUrl: Joi.string().trim().min(1).max(2000).allow(""),
   progress: Joi.number().min(0),
+  isPlaying: Joi.boolean(),
   isCompleted: Joi.boolean(),
 });
 
 export async function create(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const userId = req.userId!;
-    const { name, description, movieTitle, movieImageUrl, videoUrl } = req.body as {
+    const { name, description, movieTitle, movieImageUrl, videoUrl, videoId } = req.body as {
       name: string;
       description?: string;
       movieTitle?: string;
       movieImageUrl?: string;
       videoUrl?: string;
+      videoId?: string;
     };
     const room = await createRoom(
       {
@@ -38,6 +41,7 @@ export async function create(req: AuthenticatedRequest, res: Response, next: Nex
         movieTitle: movieTitle?.trim() || undefined,
         movieImageUrl: movieImageUrl?.trim() || undefined,
         videoUrl: videoUrl?.trim() || undefined,
+        videoId: videoId?.trim() || undefined,
       },
       userId
     );
@@ -82,6 +86,10 @@ export async function getByInviteCode(req: AuthenticatedRequest, res: Response, 
       res.status(StatusCodes.NOT_FOUND).json({ error: "Room not found" });
       return;
     }
+    if (room.isCompleted === true) {
+      res.status(StatusCodes.NOT_FOUND).json({ error: "Room not found" });
+      return;
+    }
     res.status(StatusCodes.OK).json(room);
   } catch (err) {
     next(err);
@@ -96,6 +104,7 @@ export async function update(req: AuthenticatedRequest, res: Response, next: Nex
       description?: string;
       videoUrl?: string;
       progress?: number;
+      isPlaying?: boolean;
       isCompleted?: boolean;
     };
     const room = await updateRoom(roomId, body);

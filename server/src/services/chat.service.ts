@@ -3,20 +3,14 @@ import { getFirestore } from "../config/firebase";
 import { ROOMS_COLLECTION } from "../models/Room";
 import { PARTICIPANTS_SUBCOLLECTION } from "../models/Participant";
 import { MESSAGES_SUBCOLLECTION } from "../models/Message";
+import { getUserProfile } from "./user.service";
 
-/**
- * Saves a text or reaction message to the room.
- * @param roomId - Room ID
- * @param userId - Sender user ID
- * @param type - "text" or "reaction"
- * @param content - Message body or reaction emoji/code
- */
 export async function saveMessage(
   roomId: string,
   userId: string,
   type: "text" | "reaction",
   content: string
-): Promise<{ id: string; roomId: string; userId: string; type: string; content: string; createdAt: Date }> {
+): Promise<{ id: string; roomId: string; userId: string; displayName?: string; avatar?: string; type: string; content: string; createdAt: Date }> {
   const db = getFirestore();
   const roomRef = db.collection(ROOMS_COLLECTION).doc(roomId);
   const participantSnap = await roomRef.collection(PARTICIPANTS_SUBCOLLECTION).doc(userId).get();
@@ -26,12 +20,18 @@ export async function saveMessage(
     throw err;
   }
 
+  const profile = await getUserProfile(userId);
+  const displayName = profile?.displayName ?? undefined;
+  const avatar = profile?.avatar ?? undefined;
+
   const messagesRef = roomRef.collection(MESSAGES_SUBCOLLECTION);
   const msgRef = messagesRef.doc();
   await msgRef.set(
     {
       roomId,
       userId,
+      displayName: displayName ?? null,
+      avatar: avatar ?? null,
       type,
       content,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -44,23 +44,19 @@ export async function saveMessage(
     id: msgRef.id,
     roomId,
     userId,
+    displayName,
+    avatar,
     type,
     content,
     createdAt: new Date(),
   };
 }
 
-/**
- * Fetches paginated messages for a room (newest first).
- * @param roomId - Room ID
- * @param limit - Max number of messages (default 50)
- * @param before - Cursor (message ID) for pagination; fetch messages before this
- */
 export async function getMessages(
   roomId: string,
   limit: number = 50,
   before?: string
-): Promise<Array<{ id: string; userId: string; type: string; content: string; createdAt: Date }>> {
+): Promise<Array<{ id: string; userId: string; displayName?: string; avatar?: string; type: string; content: string; createdAt: Date }>> {
   const db = getFirestore();
   const roomRef = db.collection(ROOMS_COLLECTION).doc(roomId);
   const messagesRef = roomRef.collection(MESSAGES_SUBCOLLECTION);
@@ -77,20 +73,46 @@ export async function getMessages(
   }
 
   const snap = await q.get();
+  const userIds = [...new Set(snap.docs.map((d) => (d.data() as { userId?: string }).userId).filter(Boolean))] as string[];
+  const nameMap: Record<string, string> = {};
+  const avatarMap: Record<string, string> = {};
+  await Promise.all(
+    userIds.map(async (uid) => {
+      try {
+        const p = await getUserProfile(uid);
+        if (p?.displayName) nameMap[uid] = p.displayName;
+        if (p?.avatar) avatarMap[uid] = p.avatar;
+      } catch {
+        // ignore missing user
+      }
+    })
+  );
+
   return snap.docs.map((d) => {
-    const data = d.data() as {
-      userId: string;
-      type: string;
-      content: string;
-      createdAt?: admin.firestore.Timestamp;
-    };
+    const data = d.data();
+    if (!data || typeof data.userId !== "string") {
+      return {
+        id: d.id,
+        roomId,
+        userId: "",
+        displayName: undefined as string | undefined,
+        avatar: undefined as string | undefined,
+        type: (data?.type as string) ?? "text",
+        content: (data?.content as string) ?? "",
+        createdAt: (data?.createdAt as admin.firestore.Timestamp)?.toDate?.() ?? new Date(0),
+      };
+    }
+    const displayName = (data.displayName as string | undefined) ?? nameMap[data.userId] ?? undefined;
+    const avatar = (data.avatar as string | undefined) ?? avatarMap[data.userId] ?? undefined;
     return {
       id: d.id,
       roomId,
       userId: data.userId,
-      type: data.type,
-      content: data.content,
-      createdAt: data.createdAt?.toDate?.() ?? new Date(0),
+      displayName,
+      avatar,
+      type: (data.type as string) ?? "text",
+      content: (data.content as string) ?? "",
+      createdAt: (data.createdAt as admin.firestore.Timestamp)?.toDate?.() ?? new Date(0),
     };
   });
 }

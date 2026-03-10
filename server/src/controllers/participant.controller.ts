@@ -3,9 +3,6 @@ import { StatusCodes } from "http-status-codes";
 import { AuthenticatedRequest } from "../middlewares/requireAuth";
 import { joinRoom, removeParticipant, listParticipants } from "../services/participant.service";
 
-/**
- * POST /api/rooms/:roomId/participants/join - Join room as viewer.
- */
 export async function join(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const roomId = req.params.roomId!;
@@ -21,9 +18,6 @@ export async function join(req: AuthenticatedRequest, res: Response, next: NextF
   }
 }
 
-/**
- * DELETE /api/rooms/:roomId/participants/:userId - Kick user or leave (self).
- */
 export async function kick(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const { roomId, userId: targetUserId } = req.params;
@@ -39,9 +33,6 @@ export async function kick(req: AuthenticatedRequest, res: Response, next: NextF
   }
 }
 
-/**
- * GET /api/rooms/:roomId/participants - List participants.
- */
 export async function list(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const roomId = req.params.roomId!;

@@ -2,20 +2,12 @@ import { Server } from "socket.io";
 import { AuthenticatedSocket } from "./socket.manager";
 import { logger } from "../utils/logger";
 
-/**
- * Room-scoped event names for real-time video sync and presence.
- */
 export const ROOM_EVENTS = {
   USER_JOINED: "USER_JOINED",
   USER_LEFT: "USER_LEFT",
   VIDEO_STATE_CHANGED: "VIDEO_STATE_CHANGED",
 } as const;
 
-/**
- * Registers Socket.IO handlers for room events (USER_JOINED, VIDEO_STATE_CHANGED).
- * Clients should join a room with socket.join(roomId) and emit VIDEO_STATE_CHANGED
- * (host only); server broadcasts to the room.
- */
 export function registerRoomEvents(io: Server, socket: AuthenticatedSocket): void {
   socket.on(
     "join_room",

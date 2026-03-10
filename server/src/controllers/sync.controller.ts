@@ -10,9 +10,6 @@ const syncBodySchema = Joi.object({
   timestamp: Joi.number().min(0).required(),
 });
 
-/**
- * GET /api/rooms/:roomId/sync - Get current playback state (Firebase RTDB).
- */
 export async function getSync(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const roomId = req.params.roomId!;
@@ -23,10 +20,6 @@ export async function getSync(req: AuthenticatedRequest, res: Response, next: Ne
   }
 }
 
-/**
- * PUT /api/rooms/:roomId/sync - Update playback state (host only).
- * Body: { state: "playing" | "paused", timestamp: number }
- */
 export async function updateSync(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const roomId = req.params.roomId!;

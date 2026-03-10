@@ -2,10 +2,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-/**
- * Validated environment variables.
- * All required vars must be set or the process will throw at startup.
- */
 const raw = {
   NODE_ENV: process.env.NODE_ENV ?? "development",
   PORT: process.env.PORT ?? "8000",
@@ -18,9 +14,6 @@ const raw = {
   CORS_ORIGIN: process.env.CORS_ORIGIN ?? "*",
 };
 
-/**
- * Environment config object. Validate required fields in non-test environments.
- */
 export const env = {
   NODE_ENV: raw.NODE_ENV as "development" | "production" | "test",
   PORT: parseInt(raw.PORT, 10),
@@ -33,10 +26,6 @@ export const env = {
   CORS_ORIGIN: raw.CORS_ORIGIN,
 };
 
-/**
- * Validates that required environment variables are set.
- * @throws Error if any required variable is missing in production/development
- */
 export function validateEnv(): void {
   const required = ["JWT_SECRET"];
   if (env.NODE_ENV !== "test") {

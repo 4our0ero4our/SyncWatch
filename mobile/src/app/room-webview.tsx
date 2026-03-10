@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActivityIndicator, View } from "react-native";
@@ -63,6 +63,35 @@ export default function RoomWebViewScreen() {
       .finally(() => setLoading(false));
   }, [roomId, token, user?.id]);
 
+  useEffect(() => {
+    if (!roomId || !token || loading) return;
+    pollRef.current = setInterval(fetchRoom, ROOM_POLL_INTERVAL_MS);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
+    };
+  }, [roomId, token, loading, fetchRoom]);
+
+  useEffect(() => {
+    return () => {
+      if (isHostRef.current && roomId && token) {
+        updateRoomPlayback(roomId, { isPlaying: false }, token).catch(() => {});
+        console.log("[RoomWebViewScreen] host left, set isPlaying=false");
+      }
+    };
+  }, [roomId, token]);
+
+  const handleEndParty = useCallback(async () => {
+    if (!isHost || !roomId || !token) return;
+    try {
+      await updateRoomPlayback(roomId, { isCompleted: true, isPlaying: false }, token);
+      console.log("[RoomWebViewScreen] party ended by host");
+      router.back();
+    } catch (e) {
+      console.error("[RoomWebViewScreen] end party failed", e);
+    }
+  }, [isHost, roomId, token, router]);
+
   if (!roomId || !token) {
     return null;
   }
@@ -81,16 +110,20 @@ export default function RoomWebViewScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <StackHeader handleBack={() => router.back()} title="Watch Party" />
-      <View style={styles.webviewWrap}>
-        <RoomWebView
-          roomId={roomId}
-          token={token}
-          isHost={isHost}
-          videoUrl={videoUrl}
-        />
-      </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: WATCH_ROOM_BG }]} edges={["top", "bottom"]}>
+      <StatusBar barStyle="light-content" backgroundColor={WATCH_ROOM_BG} />
+      <RoomWebView
+        roomId={roomId}
+        token={token}
+        isHost={isHost}
+        videoId={videoId}
+        isPlaying={isPlaying}
+        initialProgress={progress}
+        roomName={roomName}
+        onBack={() => router.back()}
+        onEndParty={handleEndParty}
+        onPlayStateChange={setPlayingFromHost}
+      />
       <View style={styles.chatWrap}>
         <RoomChat roomId={roomId} token={token} />
       </View>

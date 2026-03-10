@@ -16,5 +16,6 @@ export interface PartyCardProps {
   movieTitle: string;
   participants: Participant[];
   status: "Current" | "Ended";
+  isPlaying?: boolean;
   onPress?: () => void;
 }

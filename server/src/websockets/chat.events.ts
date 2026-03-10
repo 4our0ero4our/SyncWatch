@@ -3,18 +3,11 @@ import { AuthenticatedSocket } from "./socket.manager";
 import { saveMessage } from "../services/chat.service";
 import { logger } from "../utils/logger";
 
-/**
- * Chat event names for real-time messages and reactions.
- */
 export const CHAT_EVENTS = {
   NEW_CHAT_MESSAGE: "NEW_CHAT_MESSAGE",
   NEW_REACTION: "NEW_REACTION",
 } as const;
 
-/**
- * Registers Socket.IO handlers for chat events. Saves messages via chat.service
- * and broadcasts to the room.
- */
 export function registerChatEvents(io: Server, socket: AuthenticatedSocket): void {
   socket.on(
     CHAT_EVENTS.NEW_CHAT_MESSAGE,

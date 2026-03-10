@@ -4,7 +4,8 @@ import { View, Pressable, Linking } from "react-native";
 import { useUnistyles, StyleSheet } from "react-native-unistyles";
 import Typography from "@/src/components/common/Typography";
 import { updateRoomPlayback } from "@/src/services/rooms";
-import type { WebViewMessageEvent } from "react-native-webview";
+import { useUnistyles } from "react-native-unistyles";
+import { BackIcon } from "@/src/assets/svgs";
 
 let WebView: any = null;
 try {
@@ -14,54 +15,23 @@ try {
   // WebView native module not available (e.g. Expo Go).
 }
 
-const WEBVIEW_HEIGHT = 250;
-
-const VIMEO_EMBED_HTML = (videoId: string, showControls: boolean) => `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-  <style>
-    body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: black; overflow: hidden; }
-    iframe { width: 100vw; height: 100vh; border: none; }
-  </style>
-</head>
-<body>
-  <iframe
-    id="vimeo-player"
-    src="https://player.vimeo.com/video/${videoId}?controls=${showControls ? 1 : 0}&title=0&byline=0&portrait=0"
-    allow="autoplay; fullscreen; picture-in-picture"
-    allowfullscreen
-  ></iframe>
-
-  <script src="https://player.vimeo.com/api/player.js"></script>
-  <script>
-    (function() {
-      var iframe = document.getElementById('vimeo-player');
-      var player = new Vimeo.Player(iframe);
-      function post(type, data) {
-        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: type, data: data || {} }));
-        }
-      }
-      player.on('play', function() { post('play'); });
-      player.on('pause', function() { post('pause'); });
-      player.on('seeked', function() { post('seeked'); });
-      player.on('timeupdate', function(e) { post('timeupdate', { seconds: e.seconds }); });
-      player.on('ended', function() { post('ended'); });
-      player.on('error', function(e) { post('error', e); });
-    })();
-  </script>
-</body>
-</html>
-`;
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 type RoomWebViewProps = {
   roomId: string;
   token: string;
   isHost: boolean;
-  videoUrl: string | null;
-  onProgressUpdated?: (progress: number) => void;
+  videoId: string | null;
+  isPlaying: boolean;
+  initialProgress?: number;
+  roomName: string;
+  onBack: () => void;
+  onEndParty?: () => void;
+  onPlayStateChange?: (isPlaying: boolean) => void;
 };
 
 function WebViewFallback({
@@ -107,8 +77,13 @@ export default function RoomWebView({
   roomId,
   token,
   isHost,
-  videoUrl,
-  onProgressUpdated,
+  videoId,
+  isPlaying,
+  initialProgress = 0,
+  roomName,
+  onBack,
+  onEndParty,
+  onPlayStateChange,
 }: RoomWebViewProps) {
   const webViewRef = useRef<any>(null);
   const defaultUrl =
@@ -180,91 +155,207 @@ export default function RoomWebView({
     console.log("[RoomWebView] webview goBack");
   };
 
-  const reportCompleted = useCallback(() => {
-    if (!isHost) return;
-    updateRoomPlayback(roomId, { isCompleted: true }, token).catch(() => {});
-  }, [roomId, token, isHost]);
+  const handleChangeState = useCallback(
+    (state: PLAYER_STATES) => {
+      const statusStr = state === PLAYER_STATES.PLAYING ? "playing" : state === PLAYER_STATES.PAUSED ? "paused" : state === PLAYER_STATES.ENDED ? "ended" : state;
+      console.log("[RoomWebView] state", { state: statusStr, isHost });
+      if (state === PLAYER_STATES.ENDED) {
+        setStatus("ended");
+      } else if (state === PLAYER_STATES.PLAYING) {
+        setStatus("playing");
+      } else if (state === PLAYER_STATES.PAUSED || state === PLAYER_STATES.UNSTARTED) {
+        setStatus("playing");
+      }
 
-  const handleMessage = (event: WebViewMessageEvent) => {
-    const raw = event.nativeEvent.data;
-    try {
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed.type !== "string") return;
-      const type = parsed.type as string;
-      if (type === "timeupdate" && parsed.data?.seconds != null && isHost) {
-        reportProgress(Math.floor(parsed.data.seconds));
+      if (!isHost) return;
+      if (state === PLAYER_STATES.PLAYING) {
+        updatePlayback({ isPlaying: true });
+      } else if (state === PLAYER_STATES.PAUSED || state === PLAYER_STATES.ENDED) {
+        updatePlayback({ isPlaying: false });
       }
-      if (type === "ended" && isHost) {
-        reportCompleted();
+      if (state === PLAYER_STATES.ENDED) {
+        updatePlayback({ isCompleted: true });
       }
-      if (type === "error") {
-        console.warn("[RoomWebView] Vimeo player error", parsed.data);
-        setHttpError("This video cannot be played in the app. Try another one.");
-      }
-    } catch {
-      // ignore
+    },
+    [isHost, updatePlayback]
+  );
+
+  const handleReady = useCallback(() => {
+    if (initialProgress > 0 && playerRef.current && !seekedToInitial.current) {
+      seekedToInitial.current = true;
+      playerRef.current.seekTo(initialProgress, true);
+      setCurrentTime(initialProgress);
+      console.log("[RoomWebView] seeked to initial progress", initialProgress);
     }
-  };
+    playerRef.current?.getDuration().then((d) => {
+      if (Number.isFinite(d)) setDuration(d);
+    }).catch(() => {});
+  }, [initialProgress]);
 
-  if (!WebView) {
-    return <WebViewFallback />;
-  }
+  useEffect(() => {
+    if (!isHost || !videoId) return;
+    const id = setInterval(() => {
+      playerRef.current?.getCurrentTime().then((seconds) => {
+        const progress = Math.floor(seconds);
+        if (Number.isFinite(progress)) {
+          setCurrentTime(seconds);
+          updatePlayback({ progress });
+        }
+      }).catch(() => {});
+    }, PROGRESS_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [isHost, videoId, updatePlayback]);
 
-  if (!html) {
+  useEffect(() => {
+    const id = setInterval(() => {
+      playerRef.current?.getCurrentTime().then((t) => setCurrentTime(t)).catch(() => {});
+      playerRef.current?.getDuration().then((d) => setDuration(d)).catch(() => {});
+    }, PROGRESS_BAR_UPDATE_MS);
+    return () => clearInterval(id);
+  }, [videoId]);
+
+  const handlePlayPause = useCallback(() => {
+    if (!isHost) return;
+    const next = !isPlaying;
+    onPlayStateChange?.(next);
+    updatePlayback({ isPlaying: next });
+    console.log("[RoomWebView] play/pause", { isPlaying: next });
+  }, [isHost, isPlaying, updatePlayback, onPlayStateChange]);
+
+  const handleSeekBack = useCallback(() => {
+    if (!playerRef.current) return;
+    playerRef.current.getCurrentTime().then((t) => {
+      const next = Math.max(0, t - 10);
+      playerRef.current?.seekTo(next, true);
+      setCurrentTime(next);
+      if (isHost) updatePlayback({ progress: Math.floor(next) });
+      console.log("[RoomWebView] seek back", { to: next });
+    }).catch(() => {});
+  }, [isHost, updatePlayback]);
+
+  const handleSeekForward = useCallback(() => {
+    if (!playerRef.current) return;
+    playerRef.current.getCurrentTime().then((t) => {
+      playerRef.current?.getDuration().then((d) => {
+        const next = Math.min(d, t + 10);
+        playerRef.current?.seekTo(next, true);
+        setCurrentTime(next);
+        if (isHost) updatePlayback({ progress: Math.floor(next) });
+        console.log("[RoomWebView] seek forward", { to: next });
+      });
+    }).catch(() => {});
+  }, [isHost, updatePlayback]);
+
+  const handleProgressPress = useCallback(
+    (evt: { nativeEvent: { locationX?: number } }) => {
+      if (!playerRef.current || !isHost) return;
+      const locationX = evt.nativeEvent?.locationX ?? 0;
+      const w = progressBarWidth.current;
+      const ratio = w > 0 ? Math.max(0, Math.min(1, locationX / w)) : 0;
+      const seekToSec = duration * ratio;
+      playerRef.current.seekTo(seekToSec, true);
+      setCurrentTime(seekToSec);
+      updatePlayback({ progress: Math.floor(seekToSec) });
+      console.log("[RoomWebView] progress bar seek", { seconds: seekToSec });
+    },
+    [duration, isHost, updatePlayback]
+  );
+
+  useEffect(() => {
+    console.log("[RoomWebView] timeline", { currentTime: Math.floor(currentTime), duration: Math.floor(duration), status });
+  }, [currentTime, duration, status]);
+
+  if (!videoId || videoId.length < 11) {
     return (
-      <View style={[styles.placeholder, styles.webviewFixed]}>
-        <Typography variant="body" color="#666">
-          No video set or invalid video. Start a party from the lobby.
+      <View style={[styles.placeholder, styles.playerWrap]}>
+        <View style={styles.headerOverlay}>
+          <Pressable onPress={onBack} style={styles.headerBack}>
+            <BackIcon width={18} height={16} color="#fff" />
+          </Pressable>
+          <Typography variant="body" weight="bold" color="#fff" numberOfLines={1} style={styles.headerTitle}>
+            {roomName}
+          </Typography>
+        </View>
+        <Typography variant="body" color={theme.color.textMuted}>
+          No video set. Start a party from the lobby.
         </Typography>
       </View>
     );
   }
 
+  const progressRatio = duration > 0 ? currentTime / duration : 0;
+
   return (
-    <View style={styles.container}>
-      {httpError && (
-        <View style={[styles.webviewFixed, styles.errorOverlay]}>
-          <Text style={styles.errorText}>{httpError}</Text>
-        </View>
-      )}
-      <WebView
-        ref={webViewRef}
-        originWhitelist={["*"]}
-        source={{
-          html,
-          baseUrl: "https://vimeo.com",
-          headers: {
-            Referer: "https://vimeo.com/",
-          },
+    <View style={styles.playerWrap}>
+      <View style={styles.videoContainer}>
+        <YoutubeIframe
+          ref={playerRef}
+          height={PLAYER_HEIGHT}
+          videoId={videoId}
+          play={isPlaying}
+          onChangeState={handleChangeState}
+          onReady={handleReady}
+        initialPlayerParams={{
+          controls: false,
+          modestbranding: true,
+          rel: false,
+          start: Math.floor(initialProgress),
         }}
-        onMessage={handleMessage}
-        style={styles.webviewFixed}
-        androidLayerType="hardware"
-        mixedContentMode="always"
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        startInLoadingState={true}
-        setSupportMultipleWindows={false}
-        allowsInlineMediaPlayback={true}
-        mediaPlaybackRequiresUserAction={false}
-        onError={(event: any) => {
-          const { nativeEvent } = event;
-          console.warn("[RoomWebView] WebView error", nativeEvent);
-          setHttpError(`WebView error: ${nativeEvent?.description || "Unknown error"}`);
-        }}
-        onHttpError={(event: any) => {
-          const { nativeEvent } = event;
-          console.warn("[RoomWebView] WebView HTTP error", nativeEvent);
-          const status = nativeEvent?.statusCode;
-          const desc = nativeEvent?.description || "HTTP error";
-          setHttpError(`Video cannot be embedded (HTTP ${status} ${desc}). Try another video.`);
-        }}
-        renderError={(errorName: string) => (
-          <View style={[styles.webviewFixed, styles.errorContainer]}>
-            <Text style={styles.errorText}>WebView Error: {errorName}</Text>
+        webViewStyle={[styles.playerFixed, { backgroundColor: "#000" }]}
+        webViewProps={{ style: { backgroundColor: "#000" } }}
+        />
+        <View style={styles.headerOverlay} pointerEvents="box-none">
+          <View style={styles.headerRow}>
+            <Pressable onPress={onBack} style={styles.headerBack}>
+              <BackIcon width={18} height={16} color="#fff" />
+            </Pressable>
+            <Typography variant="body" weight="bold" color="#fff" numberOfLines={1} style={styles.headerTitle}>
+              {roomName}
+            </Typography>
+            {isHost && onEndParty ? (
+              <Pressable onPress={onEndParty} style={styles.endPartyBtn}>
+                <Typography variant="smallBody" weight="bold" color="#fff">
+                  End party
+                </Typography>
+              </Pressable>
+            ) : (
+              <View style={styles.endPartyPlaceholder} />
+            )}
           </View>
+        </View>
+
+        {isHost && (
+          <>
+            <View style={styles.controlsOverlay} pointerEvents="box-none">
+              <View style={styles.controlsRow}>
+                <Pressable onPress={handleSeekBack} style={styles.controlBtn}>
+                  <Typography variant="body" color="#fff">{"\u2039\u2039"}</Typography>
+                </Pressable>
+                <Pressable onPress={handlePlayPause} style={styles.controlBtn}>
+                  <Typography variant="subHeading" color="#fff">{isPlaying ? "||" : "\u25B6"}</Typography>
+                </Pressable>
+                <Pressable onPress={handleSeekForward} style={styles.controlBtn}>
+                  <Typography variant="body" color="#fff">{"\u203A\u203A"}</Typography>
+                </Pressable>
+              </View>
+            </View>
+            <View style={styles.progressRow}>
+              <Typography variant="caption" color="#fff">
+                {formatTime(currentTime)} / {formatTime(duration)}
+              </Typography>
+              <Pressable
+                style={styles.progressTrack}
+                onPress={handleProgressPress}
+                onLayout={(e) => {
+                  progressBarWidth.current = e.nativeEvent.layout.width;
+                }}
+              >
+                <View style={[styles.progressFill, { width: `${progressRatio * 100}%` }]} />
+              </Pressable>
+            </View>
+          </>
         )}
-      />
+      </View>
     </View>
   );
 }
@@ -283,37 +374,89 @@ const styles = StyleSheet.create((theme, rt) => ({
     flexDirection: "row",
     gap: 8,
   },
-  placeholder: {
-    backgroundColor: "#111",
-    justifyContent: "center",
-    alignItems: "center",
+  playerFixed: {
+    width: "100%",
+    height: PLAYER_HEIGHT,
   },
-  fallback: {
-    height: WEBVIEW_HEIGHT,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
+  videoContainer: {
+    width: "100%",
+    height: PLAYER_HEIGHT,
+    backgroundColor: "#000",
   },
-  errorContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#330000",
-  },
-  errorOverlay: {
+  headerOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    zIndex: 1,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerBack: {
+    width: 36,
+    height: 36,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 16,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.2)",
   },
-  errorText: {
-    color: "#ff5555",
-    fontSize: 14,
-    textAlign: "center",
+  headerTitle: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  endPartyBtn: {
+    backgroundColor: "#E50914",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  endPartyPlaceholder: {
+    width: 1,
+  },
+  controlsOverlay: {
+    position: "absolute",
+    bottom: 44,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  controlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 24,
+  },
+  controlBtn: {
+    padding: 12,
+  },
+  progressRow: {
+    position: "absolute",
+    bottom: 8,
+    left: 12,
+    right: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  progressTrack: {
+    flex: 1,
+    height: 4,
+    backgroundColor: "rgba(255,255,255,0.3)",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#E50914",
+    borderRadius: 2,
+  },
+  placeholder: {
+    justifyContent: "center",
+    alignItems: "center",
   },
 }));

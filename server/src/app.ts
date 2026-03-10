@@ -6,10 +6,6 @@ import { env } from "./config/env";
 import routes from "./routes/index";
 import { errorHandler } from "./middlewares/errorHandler";
 
-/**
- * Creates and configures the Express application: security, CORS, logging,
- * API routes, and global error handler.
- */
 export function createApp(): express.Application {
   const app = express();
 

@@ -10,9 +10,6 @@ const sendMessageSchema = Joi.object({
   content: Joi.string().max(2000).required(),
 });
 
-/**
- * POST /api/rooms/:roomId/messages - Send a text or reaction message.
- */
 export async function sendMessage(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const roomId = req.params.roomId!;
@@ -30,10 +27,6 @@ export async function sendMessage(req: AuthenticatedRequest, res: Response, next
   }
 }
 
-/**
- * GET /api/rooms/:roomId/messages - List messages (paginated).
- * Query: limit (default 50), before (message id cursor).
- */
 export async function listMessages(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const roomId = req.params.roomId!;

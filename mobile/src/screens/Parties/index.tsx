@@ -53,6 +53,7 @@ function roomToPartyCardItem(room: Room): PartyCardItem {
     movieTitle: room.movieTitle || "Movie",
     participants: [] as { id: string; name: string; color: string }[],
     status: "Current" as const,
+    isPlaying: room.isPlaying ?? false,
   };
 }
 

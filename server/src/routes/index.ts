@@ -9,14 +9,12 @@ import { health } from "../controllers/health.controller";
 
 const router = Router();
 
-/** GET /api/health - Health check */
 router.get("/health", health);
 
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
 router.use("/rooms", roomRoutes);
 
-/** Mount room-scoped routes under /api/rooms/:roomId/... */
 router.use("/rooms/:roomId/participants", participantRoutes);
 router.use("/rooms/:roomId/sync", syncRoutes);
 router.use("/rooms/:roomId/messages", chatRoutes);

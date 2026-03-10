@@ -68,6 +68,8 @@ const PartyLobbyScreen = () => {
     ? { uri: room.movieImageUrl }
     : require("../../assets/images/image9.png");
 
+  const isEnded = room.isCompleted === true;
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <View style={styles.header}>
@@ -87,21 +89,25 @@ const PartyLobbyScreen = () => {
             <View style={styles.imgWrapper}>
               <Image style={styles.img} source={movieImage} resizeMode="cover" />
             </View>
-            <View style={styles.clipBoard}>
-              <ClipboardCopy
-                label="Share invite code to more people"
-                text={room.inviteCode}
-                style={styles.clip}
-                align="center"
-              />
-            </View>
+            {!isEnded && (
+              <View style={styles.clipBoard}>
+                <ClipboardCopy
+                  label="Share invite code to more people"
+                  text={room.inviteCode}
+                  style={styles.clip}
+                  align="center"
+                />
+              </View>
+            )}
           </View>
         </View>
-        <View style={styles.footer}>
-          <Button title="go-to-party" onPress={handleGoToParty}>
-            Go to Party
-          </Button>
-        </View>
+        {!isEnded && (
+          <View style={styles.footer}>
+            <Button title="go-to-party" onPress={handleGoToParty}>
+              Go to Party
+            </Button>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );

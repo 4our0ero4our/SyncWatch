@@ -3,10 +3,6 @@ import { AuthenticatedRequest } from "./requireAuth";
 import { isHost } from "../services/participant.service";
 import { StatusCodes } from "http-status-codes";
 
-/**
- * Ensures the authenticated user is the host of the room in req.params.roomId.
- * Must be used after requireAuth and only on routes that have :roomId.
- */
 export function requireHost(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
   const roomId = req.params.roomId;
   const userId = req.userId;

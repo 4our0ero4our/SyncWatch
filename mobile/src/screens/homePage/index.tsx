@@ -28,13 +28,13 @@ import { useAuth } from "@/src/context/AuthContext";
 import { useUnistyles } from "react-native-unistyles";
 import AlertModal from "@/src/components/AlertModal";
 
-function vimeoToMovieProps(v: { id: string; title: string; thumbnailUri: string; description: string; embedUrl: string }): MovieProps {
+function youtubeToMovieProps(v: { id: string; title: string; thumbnailUri: string; description: string; videoId: string }): MovieProps {
   return {
     id: v.id,
     title: v.title,
     image: v.thumbnailUri ? { uri: v.thumbnailUri } : require("@/src/assets/images/image1.jpg"),
     description: v.description || undefined,
-    embedUrl: v.embedUrl,
+    embedUrl: v.videoId,
   };
 }
 
@@ -44,7 +44,7 @@ function Home() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<MovieProps | null>(null);
   const [movies, setMovies] = useState<MovieProps[]>([]);
-  const [page, setPage] = useState(1);
+  const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -71,13 +71,13 @@ function Home() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchVimeoVideosHomepage(1, 20)
-      .then((list) => {
+    fetchYouTubeHomepage()
+      .then(({ items, nextPageToken: token }) => {
         if (!cancelled) {
-          const mapped = list.map(vimeoToMovieProps);
+          const mapped = items.map(youtubeToMovieProps);
           setMovies(mapped);
-          setPage(1);
-          setHasMore(mapped.length > 0);
+          setNextPageToken(token);
+          setHasMore(!!token);
         }
       })
       .catch((e) => {
@@ -98,9 +98,9 @@ function Home() {
     setSearchLoading(true);
     let cancelled = false;
     const timer = setTimeout(() => {
-      searchVimeoVideos(trimmed, 1, 20)
-        .then((list) => {
-          if (!cancelled) setSearchResults(list.map(vimeoToMovieProps));
+      searchYouTubeVideos(trimmed, { maxResults: 20 })
+        .then(({ items }) => {
+          if (!cancelled) setSearchResults(items.map(youtubeToMovieProps));
         })
         .catch(() => {
           if (!cancelled) setSearchResults([]);
@@ -202,14 +202,14 @@ function Home() {
 
   const handleCreateRoom = async (name: string, description: string) => {
     if (!token) throw new Error("You must be logged in to create a party.");
-    const videoUrl = selectedMovie?.embedUrl;
+    const videoId = selectedMovie?.embedUrl ?? (typeof selectedMovie?.id === "string" ? selectedMovie.id : undefined);
     const room = await createRoom(
       {
         name,
         description: description || undefined,
         movieTitle: selectedMovie?.title,
         movieImageUrl: getMovieImageUrl(selectedMovie),
-        videoUrl: videoUrl || undefined,
+        videoId: videoId || undefined,
       },
       token,
     );
@@ -232,22 +232,19 @@ function Home() {
 
   const handleLoadMore = () => {
     if (isSearchActive || loadingMore || !hasMore || loading) return;
-    const nextPage = page + 1;
     setLoadingMore(true);
-    fetchVimeoVideosHomepage(nextPage, 20)
-      .then((list) => {
-        const mapped = list.map(vimeoToMovieProps);
+    fetchYouTubeHomepage(nextPageToken)
+      .then(({ items, nextPageToken: token }) => {
+        const mapped = items.map(youtubeToMovieProps);
         if (mapped.length === 0) {
           setHasMore(false);
           return;
         }
         setMovies((prev) => [...prev, ...mapped]);
-        setPage(nextPage);
+        setNextPageToken(token);
+        setHasMore(!!token);
       })
-      .catch(() => {
-        // keep previous data, just stop endless loading on error
-        setHasMore(false);
-      })
+      .catch(() => setHasMore(false))
       .finally(() => setLoadingMore(false));
   };
 

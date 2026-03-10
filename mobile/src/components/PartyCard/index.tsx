@@ -15,22 +15,19 @@ const PartyCard: React.FC<PartyCardProps> = ({
   movieTitle,
   participants,
   status,
+  isPlaying,
   onPress,
 }) => {
   const { theme } = useUnistyles();
 
   const handlePress = () => {
-    if (onPress) {
-      onPress();
-    } else {
-      //   router.push(`/party/${id}`);
-    }
+    if (onPress) onPress();
   };
 
   const getStatusLabel = () => {
     switch (status) {
       case "Current":
-        return "Upcoming";
+        return isPlaying ? "Playing" : "Upcoming";
       case "Ended":
         return "Ended";
     }
@@ -47,16 +44,10 @@ const PartyCard: React.FC<PartyCardProps> = ({
 
   const visibleParticipants = participants.slice(0, 2);
   const remainingCount = participants.length - 2;
+  const isEnded = status === "Ended";
 
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.container,
-        pressed && styles.containerPressed,
-      ]}
-      onPress={handlePress}
-    >
-      <View style={styles.content}>
+  const content = (
+    <View style={styles.content}>
         <View style={styles.posterContainer}>
           <Image
             source={movieImage}
@@ -150,7 +141,22 @@ const PartyCard: React.FC<PartyCardProps> = ({
             </View>
           </View>
         </View>
-      </View>
+    </View>
+  );
+
+  if (isEnded) {
+    return <View style={styles.container}>{content}</View>;
+  }
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.container,
+        pressed && styles.containerPressed,
+      ]}
+      onPress={handlePress}
+    >
+      {content}
     </Pressable>
   );
 };

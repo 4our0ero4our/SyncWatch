@@ -13,10 +13,6 @@ function serializeError(err: unknown): { name?: string; message: string; stack?:
   return { message: typeof err === "string" ? err : JSON.stringify(err) };
 }
 
-/**
- * Winston logger instance.
- * Logs to console with level based on NODE_ENV.
- */
 export const logger = winston.createLogger({
   level: env.NODE_ENV === "production" ? "info" : "debug",
   format: winston.format.combine(

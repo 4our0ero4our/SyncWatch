@@ -2,9 +2,6 @@ import { getFirebaseDatabase } from "../config/firebase";
 import { getRoomById } from "./room.service";
 import { logger } from "../utils/logger";
 
-/**
- * Playback state stored in Firebase RTDB at /rooms/{roomId}/playback.
- */
 export interface PlaybackState {
   state: "playing" | "paused";
   timestamp: number;
@@ -12,11 +9,6 @@ export interface PlaybackState {
   hostId: string;
 }
 
-/**
- * Reads current playback state from Firebase RTDB for a room.
- * @param roomId - Room ID
- * @returns Current playback state or null if not set
- */
 export async function getPlaybackState(roomId: string): Promise<PlaybackState | null> {
   try {
     const db = getFirebaseDatabase();
@@ -29,14 +21,6 @@ export async function getPlaybackState(roomId: string): Promise<PlaybackState | 
   }
 }
 
-/**
- * Updates playback state in Firebase RTDB. Only the host should update.
- * Verifies that room exists and caller is host before writing.
- * @param roomId - Room ID
- * @param hostId - User ID of the host (must match room's hostId)
- * @param state - "playing" | "paused"
- * @param timestamp - Current video time in seconds
- */
 export async function setPlaybackState(
   roomId: string,
   hostId: string,
@@ -61,13 +45,6 @@ export async function setPlaybackState(
   }
 }
 
-/**
- * Verifies that a given timestamp is within an acceptable drift of the stored state.
- * Used to reject obviously stale or spoofed sync requests.
- * @param roomId - Room ID
- * @param timestamp - Claimed playback time
- * @param maxDriftSeconds - Allowed drift in seconds (default 5)
- */
 export async function isPlaybackTimestampValid(
   roomId: string,
   timestamp: number,

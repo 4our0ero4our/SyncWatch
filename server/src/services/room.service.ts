@@ -31,6 +31,7 @@ export type CreateRoomInput = {
   movieTitle?: string;
   movieImageUrl?: string;
   videoUrl?: string;
+  videoId?: string;
 };
 
 export type RoomResponse = {
@@ -42,16 +43,14 @@ export type RoomResponse = {
   movieTitle?: string;
   movieImageUrl?: string;
   videoUrl?: string;
+  videoId?: string;
   progress?: number;
+  isPlaying?: boolean;
   isCompleted?: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
-/**
- * Creates a new room and adds the creator as host participant.
- * Generates a unique 6-char invite code.
- */
 export async function createRoom(
   input: CreateRoomInput,
   hostId: string
@@ -83,7 +82,9 @@ export async function createRoom(
       movieTitle: input.movieTitle ?? null,
       movieImageUrl: input.movieImageUrl ?? null,
       videoUrl: input.videoUrl ?? null,
+      videoId: input.videoId ?? null,
       progress: 0,
+      isPlaying: false,
       isCompleted: false,
       createdAt: now,
       updatedAt: now,
@@ -113,7 +114,9 @@ export async function createRoom(
       movieTitle: input.movieTitle,
       movieImageUrl: input.movieImageUrl,
       videoUrl: input.videoUrl,
+      videoId: input.videoId,
       progress: 0,
+      isPlaying: false,
       isCompleted: false,
       createdAt,
       updatedAt,
@@ -140,16 +143,15 @@ export async function getRoomById(roomId: string): Promise<(RoomResponse & { vid
     movieTitle: data.movieTitle,
     movieImageUrl: data.movieImageUrl,
     videoUrl: data.videoUrl,
+    videoId: data.videoId,
     progress: data.progress ?? 0,
+    isPlaying: data.isPlaying ?? false,
     isCompleted: data.isCompleted ?? false,
     createdAt,
     updatedAt,
   };
 }
 
-/**
- * Lists rooms hosted by the given user (newest first).
- */
 export async function getRoomsByHost(hostId: string): Promise<RoomResponse[]> {
   const db = getFirestore();
   const snap = await db.collection(ROOMS_COLLECTION).where("hostId", "==", hostId).get();
@@ -166,7 +168,9 @@ export async function getRoomsByHost(hostId: string): Promise<RoomResponse[]> {
       movieTitle: data.movieTitle,
       movieImageUrl: data.movieImageUrl,
       videoUrl: data.videoUrl,
+      videoId: data.videoId,
       progress: data.progress ?? 0,
+      isPlaying: data.isPlaying ?? false,
       isCompleted: data.isCompleted ?? false,
       createdAt,
       updatedAt,
@@ -176,9 +180,6 @@ export async function getRoomsByHost(hostId: string): Promise<RoomResponse[]> {
   return rooms;
 }
 
-/**
- * Finds a room by its invite code (case-sensitive). Returns null if not found.
- */
 export async function getRoomByInviteCode(inviteCode: string): Promise<RoomResponse | null> {
   const db = getFirestore();
   const trimmed = inviteCode.trim().toUpperCase();
@@ -198,16 +199,15 @@ export async function getRoomByInviteCode(inviteCode: string): Promise<RoomRespo
     movieTitle: data.movieTitle,
     movieImageUrl: data.movieImageUrl,
     videoUrl: data.videoUrl,
+    videoId: data.videoId,
     progress: data.progress ?? 0,
+    isPlaying: data.isPlaying ?? false,
     isCompleted: data.isCompleted ?? false,
     createdAt,
     updatedAt,
   };
 }
 
-/**
- * Updates room fields (e.g. name, videoUrl, progress, isCompleted). Only host should call this.
- */
 export async function updateRoom(
   roomId: string,
   updates: {
@@ -215,6 +215,7 @@ export async function updateRoom(
     description?: string;
     videoUrl?: string;
     progress?: number;
+    isPlaying?: boolean;
     isCompleted?: boolean;
   }
 ): Promise<RoomResponse | null> {
@@ -227,6 +228,7 @@ export async function updateRoom(
   if (updates.description != null) cleanUpdates.description = updates.description;
   if (updates.videoUrl != null) cleanUpdates.videoUrl = updates.videoUrl;
   if (updates.progress != null) cleanUpdates.progress = updates.progress;
+  if (updates.isPlaying != null) cleanUpdates.isPlaying = updates.isPlaying;
   if (updates.isCompleted != null) cleanUpdates.isCompleted = updates.isCompleted;
   await ref.set(
     {
@@ -238,9 +240,6 @@ export async function updateRoom(
   return getRoomById(roomId);
 }
 
-/**
- * Deletes a room and all its participants.
- */
 export async function deleteRoom(roomId: string): Promise<boolean> {
   try {
     const db = getFirestore();

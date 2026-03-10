@@ -9,7 +9,9 @@ export type Room = {
   movieTitle?: string;
   movieImageUrl?: string;
   videoUrl?: string;
+  videoId?: string;
   progress?: number;
+  isPlaying?: boolean;
   isCompleted?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -21,6 +23,7 @@ export type CreateRoomPayload = {
   movieTitle?: string;
   movieImageUrl?: string;
   videoUrl?: string;
+  videoId?: string;
 };
 
 export async function createRoom(
@@ -84,7 +87,7 @@ export async function getRoom(roomId: string, token: string): Promise<Room> {
 
 export async function updateRoomPlayback(
   roomId: string,
-  updates: { videoUrl?: string; progress?: number; isCompleted?: boolean },
+  updates: { videoUrl?: string; progress?: number; isPlaying?: boolean; isCompleted?: boolean },
   token: string
 ): Promise<Room> {
   const res = await fetch(`${API_BASE_URL}${ROOMS_PATH}/${roomId}`, {
@@ -129,4 +132,24 @@ export async function getRoomByInviteCode(
     throw new Error(text || `Room not found: ${res.status}`);
   }
   return res.json() as Promise<Room>;
+}
+
+export type RoomParticipant = {
+  userId: string;
+  role: string;
+  displayName?: string;
+  avatar?: string;
+};
+
+export async function getParticipants(roomId: string, token: string): Promise<RoomParticipant[]> {
+  const res = await fetch(`${API_BASE_URL}${ROOMS_PATH}/${roomId}/participants`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Get participants failed: ${res.status}`);
+  }
+  const data = (await res.json()) as { participants: RoomParticipant[] };
+  return data.participants ?? [];
 }

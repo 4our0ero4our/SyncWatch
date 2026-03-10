@@ -4,9 +4,6 @@ import { logger } from "../utils/logger";
 
 let initialized = false;
 
-/**
- * Initializes Firebase Admin SDK (Auth + Firestore + RTDB).
- */
 export function initializeFirebase(): void {
   if (initialized) return;
   try {
@@ -30,10 +27,6 @@ export function initializeFirebase(): void {
   }
 }
 
-/**
- * Returns Firebase Admin Auth instance for verifying Google/Apple tokens.
- * @throws If Firebase has not been initialized
- */
 export function getFirebaseAuth(): admin.auth.Auth {
   if (!initialized) {
     throw new Error("Firebase Admin not initialized");
@@ -41,10 +34,6 @@ export function getFirebaseAuth(): admin.auth.Auth {
   return admin.auth();
 }
 
-/**
- * Returns Firebase Realtime Database reference for ultra-fast playback state.
- * @throws If Firebase has not been initialized
- */
 export function getFirebaseDatabase(): admin.database.Database {
   if (!initialized) {
     throw new Error("Firebase Admin not initialized");
@@ -52,10 +41,6 @@ export function getFirebaseDatabase(): admin.database.Database {
   return admin.database();
 }
 
-/**
- * Returns Firestore instance for persistent data (users, rooms, chat history).
- * @throws If Firebase has not been initialized
- */
 export function getFirestore(): admin.firestore.Firestore {
   if (!initialized) {
     throw new Error("Firebase Admin not initialized");
@@ -63,9 +48,6 @@ export function getFirestore(): admin.firestore.Firestore {
   return admin.firestore();
 }
 
-/**
- * Returns whether Firebase Admin has been initialized.
- */
 export function isFirebaseInitialized(): boolean {
   return initialized;
 }

@@ -6,10 +6,6 @@ import { createApp } from "./app";
 import { createSocketServer } from "./websockets/socket.manager";
 import { logger } from "./utils/logger";
 
-/**
- * Entry point: validates env, connects DB and Firebase, mounts Express on HTTP server,
- * attaches Socket.IO, and starts listening on PORT.
- */
 async function main(): Promise<void> {
   validateEnv();
   await connectDatabase();

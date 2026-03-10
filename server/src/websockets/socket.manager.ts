@@ -5,19 +5,10 @@ import { logger } from "../utils/logger";
 import { registerRoomEvents } from "./room.events";
 import { registerChatEvents } from "./chat.events";
 
-/**
- * Extended Socket with optional userId (set after auth).
- */
 export interface AuthenticatedSocket extends Socket {
   userId?: string;
 }
 
-/**
- * Initializes the Socket.IO server, attaches it to the HTTP server,
- * and configures JWT auth for handshake. Registers room and chat event handlers.
- * @param httpServer - HTTP server from Express
- * @returns Socket.IO server instance
- */
 export function createSocketServer(httpServer: HttpServer): Server {
   const io = new Server(httpServer, {
     cors: { origin: process.env.CORS_ORIGIN ?? "*" },
