@@ -13,4 +13,4 @@ export function getYouTubeApiBase(): string {
   return YOUTUBE_API_BASE;
 }
 
-export const DEFAULT_HOMEPAGE_QUERY = "official movie trailers";
+export const DEFAULT_HOMEPAGE_QUERY = "movies";

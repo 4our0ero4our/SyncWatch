@@ -9,6 +9,7 @@ import Header from "@/src/components/TabHeader";
 import MovieModal from "@/src/components/Modal";
 import Input from "@/src/components/common/Input";
 import PartyCard from "@/src/components/PartyCard";
+import { PartyCardProps } from "@/src/components/PartyCard/types";
 import CustomTab from "@/src/components/CustomTabs";
 import Typography from "@/src/components/common/Typography";
 import Button from "@/src/components/common/Button";
@@ -19,7 +20,6 @@ import {
   getRoomByInviteCode,
   type Room,
 } from "@/src/services/rooms";
-import { pastParties } from "@/src/utils/dummyData";
 
 const tabOptions = [
   { label: "Current parties", value: "Current" },
@@ -200,31 +200,22 @@ export default function PartiesScreen() {
       )}
       {selectedTab === "Ended" && (
         <FlatList
-          data={
-            pastParties as unknown as {
-              id: string;
-              title: string;
-              description: string;
-              date: string;
-              movieImage: any;
-              movieTitle: string;
-              participants: { id: string; name: string; color: string }[];
-              status: "Current";
-            }[]
-          }
+          data={pastPartiesData}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Typography
-                variant="body"
-                weight="regular"
-                color={theme.color.textMuted}
-              >
-                No past parties yet
-              </Typography>
+              {loading ? (
+                <Typography variant="body" weight="regular" color={theme.color.textMuted}>
+                  Loading...
+                </Typography>
+              ) : (
+                <Typography variant="body" weight="regular" color={theme.color.textMuted}>
+                  No past parties yet
+                </Typography>
+              )}
             </View>
           }
         />

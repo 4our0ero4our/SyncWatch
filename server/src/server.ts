@@ -7,6 +7,7 @@ import { createSocketServer } from "./websockets/socket.manager";
 import { logger } from "./utils/logger";
 
 async function main(): Promise<void> {
+  const PORT = process.env.PORT || 8000;
   validateEnv();
   await connectDatabase();
   initializeFirebase();
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
   const httpServer = createServer(app);
   createSocketServer(httpServer);
 
-  httpServer.listen(env.PORT, () => {
+  httpServer.listen(PORT, () => {
     logger.info(`Server listening on port ${env.PORT}`);
   });
 }

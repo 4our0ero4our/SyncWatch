@@ -16,17 +16,12 @@ import { SearchIcon } from "@/src/assets/svgs";
 import MovieModal from "@/src/components/Modal";
 import Input from "@/src/components/common/Input";
 import { MovieProps } from "../homePage/CreateParty/types";
-import {
-  fetchPopularMoviesForProvider,
-  fetchSearchMovies,
-  isMovieOnProvider,
-} from "@/src/services/tmdb";
+import { fetchYouTubeHomepage, searchYouTubeVideos } from "@/src/services/youtube";
 import { createRoom } from "@/src/services/rooms";
 import { Details, Form, Success } from "./CreateParty";
 import Typography from "@/src/components/common/Typography";
 import { useAuth } from "@/src/context/AuthContext";
 import { useUnistyles } from "react-native-unistyles";
-import AlertModal from "@/src/components/AlertModal";
 
 function youtubeToMovieProps(v: { id: string; title: string; thumbnailUri: string; description: string; videoId: string }): MovieProps {
   return {
@@ -52,20 +47,11 @@ function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<MovieProps[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [checkingMovieId, setCheckingMovieId] = useState<number | null>(null);
   const [createdRoom, setCreatedRoom] = useState<
     import("@/src/services/rooms").Room | null
   >(null);
   const { user, token } = useAuth();
   const router = useRouter();
-
-  const [alertState, setAlertState] = useState<{
-    message: string;
-    primaryLabel: string;
-    onPrimary: () => void;
-    secondaryLabel?: string;
-    onSecondary?: () => void;
-  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -129,55 +115,9 @@ function Home() {
     }, 300);
   };
 
-  /**
-   * Handles the movie press event. Checks if user has a streaming provider and if the movie
-   * is available on that platform before opening the create party modal.
-   */
-  const handleMoviePress = async (movie: MovieProps) => {
-    const provider = user?.streamingProvider;
-    if (!provider) {
-      setAlertState({
-        message: "Please select your streaming provider in Settings first.",
-        primaryLabel: "Go to Settings",
-        onPrimary: () => {
-          setAlertState(null);
-          router.push("/(tabs)/settings");
-        },
-        secondaryLabel: "OK",
-        onSecondary: () => setAlertState(null),
-      });
-      return;
-    }
-
-    setCheckingMovieId(movie.id);
-    try {
-      const available = await isMovieOnProvider(movie.id, provider);
-      if (!available) {
-        const providerLabel =
-          provider === "netflix" ? "Netflix" : "Prime Video";
-        setAlertState({
-          message: `"${movie.title}" isn't available on ${providerLabel}. Change your streaming provider in Settings?`,
-          primaryLabel: "Change in Settings",
-          onPrimary: () => {
-            setAlertState(null);
-            router.push("/(tabs)/settings");
-          },
-          secondaryLabel: "Cancel",
-          onSecondary: () => setAlertState(null),
-        });
-        return;
-      }
-      setSelectedMovie(movie);
-      setModalVisible(true);
-    } catch {
-      setAlertState({
-        message: "Could not check availability. Please try again.",
-        primaryLabel: "OK",
-        onPrimary: () => setAlertState(null),
-      });
-    } finally {
-      setCheckingMovieId(null);
-    }
+  const handleMoviePress = (movie: MovieProps) => {
+    setSelectedMovie(movie);
+    setModalVisible(true);
   };
 
   const handleCreateParty = () => {
@@ -383,14 +323,6 @@ function Home() {
           />
         )}
       </MovieModal>
-      <AlertModal
-        visible={!!alertState}
-        message={alertState?.message ?? ""}
-        primaryLabel={alertState?.primaryLabel ?? ""}
-        onPrimary={alertState?.onPrimary ?? (() => setAlertState(null))}
-        secondaryLabel={alertState?.secondaryLabel}
-        onSecondary={alertState?.onSecondary}
-      />
     </SafeAreaView>
   );
 }

@@ -1,25 +1,23 @@
-/* eslint-disable react/no-unescaped-entities */
-import React, { useRef } from "react";
-import { View, Pressable, Linking } from "react-native";
-import { useUnistyles, StyleSheet } from "react-native-unistyles";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { View, Pressable } from "react-native";
+import YoutubeIframe, { YoutubeIframeRef } from "react-native-youtube-iframe";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import Typography from "@/src/components/common/Typography";
-import { updateRoomPlayback } from "@/src/services/rooms";
-import { useUnistyles } from "react-native-unistyles";
 import { BackIcon } from "@/src/assets/svgs";
+import { updateRoomPlayback } from "@/src/services/rooms";
 
-let WebView: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  WebView = require("react-native-webview").WebView;
-} catch {
-  // WebView native module not available (e.g. Expo Go).
-}
+const PLAYER_HEIGHT = 280;
+const PROGRESS_PUSH_MS = 5000;
+const UI_POLL_MS = 750;
 
 function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
+
+type Status = "upcoming" | "playing" | "ended";
 
 type RoomWebViewProps = {
   roomId: string;
@@ -34,45 +32,6 @@ type RoomWebViewProps = {
   onPlayStateChange?: (isPlaying: boolean) => void;
 };
 
-function WebViewFallback({
-  provider,
-}: {
-  provider: "netflix" | "prime" | "youtube";
-}) {
-  const { theme } = useUnistyles();
-  return (
-    <View
-      style={[styles.fallback, { backgroundColor: theme.color.background }]}
-    >
-      <Typography
-        variant="body"
-        weight="medium"
-        color={theme.color.textMuted}
-        style={{ textAlign: "center", marginBottom: 8 }}
-      >
-        In-app streaming needs a native build. If you opened this via Expo Go,
-        that app does not include WebView.
-      </Typography>
-      <Typography
-        variant="smallBody"
-        color={theme.color.textMuted}
-        style={{ textAlign: "center", marginBottom: 16 }}
-      >
-        Build and install once: connect your phone, run "npx expo run:android",
-        then open this project from the installed app (not Expo Go).
-      </Typography>
-      <Pressable
-        style={[styles.openBtn, { backgroundColor: theme.color.primary }]}
-        onPress={() => Linking.openURL(url)}
-      >
-        <Typography variant="body" weight="bold" color={theme.color.white}>
-          Open {provider === "netflix" ? "Netflix" : "Prime"} in browser
-        </Typography>
-      </Pressable>
-    </View>
-  );
-}
-
 export default function RoomWebView({
   roomId,
   token,
@@ -85,190 +44,128 @@ export default function RoomWebView({
   onEndParty,
   onPlayStateChange,
 }: RoomWebViewProps) {
-  const webViewRef = useRef<any>(null);
-  const defaultUrl =
-    STREAMING_BASE_URLS[provider] ?? STREAMING_BASE_URLS.netflix;
-  const trimmedVideoUrl = initialVideoUrl?.trim() ?? "";
-  const trimmedTitle = movieTitle?.trim() ?? "";
+  const { theme } = useUnistyles();
+  const playerRef = useRef<YoutubeIframeRef>(null);
+  const seekedToInitial = useRef(false);
+  const progressBarWidth = useRef(0);
 
-  let initialUrl = defaultUrl;
-  let useYouTubeEmbed = false;
-  let youTubeVideoId: string | null = null;
+  const [status, setStatus] = useState<Status>("upcoming");
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
-  if (trimmedVideoUrl.length > 0) {
-    if (provider === "youtube") {
+  const updatePlayback = useCallback(
+    async (updates: { progress?: number; isPlaying?: boolean; isCompleted?: boolean }) => {
       try {
-        const url = new URL(trimmedVideoUrl);
-        if (url.hostname.includes("youtu.be")) {
-          youTubeVideoId = url.pathname.replace("/", "");
-        } else {
-          youTubeVideoId = url.searchParams.get("v");
-        }
-      } catch {
-        youTubeVideoId = null;
+        console.log("[RoomWebView] updateRoomPlayback", { roomId, updates });
+        await updateRoomPlayback(roomId, updates, token);
+      } catch (e) {
+        console.warn("[RoomWebView] updateRoomPlayback failed", e);
       }
-      if (youTubeVideoId) {
-        useYouTubeEmbed = true;
-      } else {
-        initialUrl = trimmedVideoUrl;
-      }
-    } else {
-      initialUrl = trimmedVideoUrl;
-    }
-  } else if (trimmedTitle.length > 0) {
-    const q = encodeURIComponent(trimmedTitle);
-    if (provider === "netflix") {
-      initialUrl = `${defaultUrl}/search?q=${q}`;
-    } else if (provider === "prime") {
-      initialUrl = `${defaultUrl}/search?phrase=${q}`;
-    } else if (provider === "youtube") {
-      initialUrl = `${defaultUrl}/results?search_query=${q}`;
-    }
-  }
+    },
+    [roomId, token]
+  );
 
-  const handleNavigationStateChange = (navState: { url: string }) => {
-    const currentUrl = navState.url;
-    console.log("[RoomWebView] navigation", {
-      url: currentUrl,
-      provider,
-      isHost,
-    });
-    if (isHost) {
-      const isNetflixWatch = currentUrl.includes("netflix.com/watch/");
-      const isPrimeWatch =
-        currentUrl.includes("primevideo.com") &&
-        (currentUrl.includes("/watch/") || currentUrl.includes("/gp/video/"));
-      const isYoutubeWatch = currentUrl.includes("youtube.com/watch?v=");
-      if (isNetflixWatch || isPrimeWatch || isYoutubeWatch) {
-        console.log("[RoomWebView] detected watch URL, saving to room");
-        updateRoomVideoUrl(roomId, currentUrl, token)
-          .then(() => {
-            onVideoUrlUpdated?.(currentUrl);
-          })
-          .catch(() => {});
-      }
-    }
-  };
-
-  const handleWebBack = () => {
-    webViewRef.current?.goBack?.();
-    console.log("[RoomWebView] webview goBack");
-  };
-
-  const handleChangeState = useCallback(
-    (state: PLAYER_STATES) => {
-      const statusStr = state === PLAYER_STATES.PLAYING ? "playing" : state === PLAYER_STATES.PAUSED ? "paused" : state === PLAYER_STATES.ENDED ? "ended" : state;
-      console.log("[RoomWebView] state", { state: statusStr, isHost });
-      if (state === PLAYER_STATES.ENDED) {
-        setStatus("ended");
-      } else if (state === PLAYER_STATES.PLAYING) {
-        setStatus("playing");
-      } else if (state === PLAYER_STATES.PAUSED || state === PLAYER_STATES.UNSTARTED) {
-        setStatus("playing");
-      }
+  const onChangeState = useCallback(
+    (state: string) => {
+      console.log("[RoomWebView] player state", { state, isHost });
+      if (state === "playing") setStatus("playing");
+      if (state === "paused") setStatus((prev) => (prev === "ended" ? "ended" : "playing"));
+      if (state === "ended") setStatus("ended");
 
       if (!isHost) return;
-      if (state === PLAYER_STATES.PLAYING) {
-        updatePlayback({ isPlaying: true });
-      } else if (state === PLAYER_STATES.PAUSED || state === PLAYER_STATES.ENDED) {
-        updatePlayback({ isPlaying: false });
-      }
-      if (state === PLAYER_STATES.ENDED) {
-        updatePlayback({ isCompleted: true });
-      }
+      if (state === "playing") updatePlayback({ isPlaying: true, isCompleted: false });
+      if (state === "paused") updatePlayback({ isPlaying: false });
+      if (state === "ended") updatePlayback({ isPlaying: false, isCompleted: true });
     },
     [isHost, updatePlayback]
   );
 
-  const handleReady = useCallback(() => {
-    if (initialProgress > 0 && playerRef.current && !seekedToInitial.current) {
+  const onReady = useCallback(() => {
+    if (initialProgress > 0 && !seekedToInitial.current) {
       seekedToInitial.current = true;
-      playerRef.current.seekTo(initialProgress, true);
+      playerRef.current?.seekTo(initialProgress, true);
       setCurrentTime(initialProgress);
-      console.log("[RoomWebView] seeked to initial progress", initialProgress);
+      console.log("[RoomWebView] seekTo initialProgress", initialProgress);
     }
-    playerRef.current?.getDuration().then((d) => {
-      if (Number.isFinite(d)) setDuration(d);
-    }).catch(() => {});
   }, [initialProgress]);
+
+  useEffect(() => {
+    if (!videoId) return;
+    const id = setInterval(() => {
+      playerRef.current?.getCurrentTime().then(setCurrentTime).catch(() => {});
+      playerRef.current?.getDuration().then(setDuration).catch(() => {});
+    }, UI_POLL_MS);
+    return () => clearInterval(id);
+  }, [videoId]);
+
+  useEffect(() => {
+    console.log("[RoomWebView] timeline", {
+      currentTime: Math.floor(currentTime),
+      duration: Math.floor(duration),
+      status,
+      isPlaying,
+    });
+  }, [currentTime, duration, status, isPlaying]);
 
   useEffect(() => {
     if (!isHost || !videoId) return;
     const id = setInterval(() => {
-      playerRef.current?.getCurrentTime().then((seconds) => {
-        const progress = Math.floor(seconds);
-        if (Number.isFinite(progress)) {
-          setCurrentTime(seconds);
-          updatePlayback({ progress });
-        }
-      }).catch(() => {});
-    }, PROGRESS_INTERVAL_MS);
+      playerRef.current
+        ?.getCurrentTime()
+        .then((t) => {
+          const progress = Math.floor(t);
+          if (Number.isFinite(progress) && progress >= 0) updatePlayback({ progress });
+        })
+        .catch(() => {});
+    }, PROGRESS_PUSH_MS);
     return () => clearInterval(id);
   }, [isHost, videoId, updatePlayback]);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      playerRef.current?.getCurrentTime().then((t) => setCurrentTime(t)).catch(() => {});
-      playerRef.current?.getDuration().then((d) => setDuration(d)).catch(() => {});
-    }, PROGRESS_BAR_UPDATE_MS);
-    return () => clearInterval(id);
-  }, [videoId]);
 
   const handlePlayPause = useCallback(() => {
     if (!isHost) return;
     const next = !isPlaying;
     onPlayStateChange?.(next);
     updatePlayback({ isPlaying: next });
-    console.log("[RoomWebView] play/pause", { isPlaying: next });
-  }, [isHost, isPlaying, updatePlayback, onPlayStateChange]);
+    console.log("[RoomWebView] control play/pause", { next });
+  }, [isHost, isPlaying, onPlayStateChange, updatePlayback]);
 
-  const handleSeekBack = useCallback(() => {
-    if (!playerRef.current) return;
-    playerRef.current.getCurrentTime().then((t) => {
-      const next = Math.max(0, t - 10);
-      playerRef.current?.seekTo(next, true);
-      setCurrentTime(next);
-      if (isHost) updatePlayback({ progress: Math.floor(next) });
-      console.log("[RoomWebView] seek back", { to: next });
-    }).catch(() => {});
-  }, [isHost, updatePlayback]);
-
-  const handleSeekForward = useCallback(() => {
-    if (!playerRef.current) return;
-    playerRef.current.getCurrentTime().then((t) => {
-      playerRef.current?.getDuration().then((d) => {
-        const next = Math.min(d, t + 10);
-        playerRef.current?.seekTo(next, true);
+  const seekRelative = useCallback(
+    async (deltaSeconds: number) => {
+      if (!playerRef.current) return;
+      try {
+        const t = await playerRef.current.getCurrentTime();
+        const d = await playerRef.current.getDuration();
+        const next = Math.max(0, Math.min(d || t + Math.abs(deltaSeconds), t + deltaSeconds));
+        playerRef.current.seekTo(next, true);
         setCurrentTime(next);
         if (isHost) updatePlayback({ progress: Math.floor(next) });
-        console.log("[RoomWebView] seek forward", { to: next });
-      });
-    }).catch(() => {});
-  }, [isHost, updatePlayback]);
+        console.log("[RoomWebView] control seek", { deltaSeconds, to: next });
+      } catch {}
+    },
+    [isHost, updatePlayback]
+  );
 
   const handleProgressPress = useCallback(
     (evt: { nativeEvent: { locationX?: number } }) => {
-      if (!playerRef.current || !isHost) return;
-      const locationX = evt.nativeEvent?.locationX ?? 0;
+      if (!isHost || !playerRef.current || duration <= 0) return;
       const w = progressBarWidth.current;
-      const ratio = w > 0 ? Math.max(0, Math.min(1, locationX / w)) : 0;
-      const seekToSec = duration * ratio;
-      playerRef.current.seekTo(seekToSec, true);
-      setCurrentTime(seekToSec);
-      updatePlayback({ progress: Math.floor(seekToSec) });
-      console.log("[RoomWebView] progress bar seek", { seconds: seekToSec });
+      const x = evt.nativeEvent?.locationX ?? 0;
+      const ratio = w > 0 ? Math.max(0, Math.min(1, x / w)) : 0;
+      const next = duration * ratio;
+      playerRef.current.seekTo(next, true);
+      setCurrentTime(next);
+      updatePlayback({ progress: Math.floor(next) });
+      console.log("[RoomWebView] control progress seek", { seconds: next });
     },
     [duration, isHost, updatePlayback]
   );
 
-  useEffect(() => {
-    console.log("[RoomWebView] timeline", { currentTime: Math.floor(currentTime), duration: Math.floor(duration), status });
-  }, [currentTime, duration, status]);
+  const progressRatio = useMemo(() => (duration > 0 ? currentTime / duration : 0), [currentTime, duration]);
 
-  if (!videoId || videoId.length < 11) {
+  if (!videoId) {
     return (
-      <View style={[styles.placeholder, styles.playerWrap]}>
-        <View style={styles.headerOverlay}>
+      <View style={[styles.placeholder, { backgroundColor: theme.color.background }]}>
+        <View style={styles.headerOverlay} pointerEvents="box-none">
           <Pressable onPress={onBack} style={styles.headerBack}>
             <BackIcon width={18} height={16} color="#fff" />
           </Pressable>
@@ -277,13 +174,11 @@ export default function RoomWebView({
           </Typography>
         </View>
         <Typography variant="body" color={theme.color.textMuted}>
-          No video set. Start a party from the lobby.
+          No video set for this party.
         </Typography>
       </View>
     );
   }
-
-  const progressRatio = duration > 0 ? currentTime / duration : 0;
 
   return (
     <View style={styles.playerWrap}>
@@ -293,17 +188,18 @@ export default function RoomWebView({
           height={PLAYER_HEIGHT}
           videoId={videoId}
           play={isPlaying}
-          onChangeState={handleChangeState}
-          onReady={handleReady}
-        initialPlayerParams={{
-          controls: false,
-          modestbranding: true,
-          rel: false,
-          start: Math.floor(initialProgress),
-        }}
-        webViewStyle={[styles.playerFixed, { backgroundColor: "#000" }]}
-        webViewProps={{ style: { backgroundColor: "#000" } }}
+          onChangeState={onChangeState}
+          onReady={onReady}
+          initialPlayerParams={{
+            controls: false,
+            modestbranding: true,
+            rel: 0,
+            start: Math.floor(initialProgress),
+          }}
+          webViewStyle={[styles.playerFixed, { backgroundColor: "#000" }]}
+          webViewProps={{ style: { backgroundColor: "#000" } }}
         />
+
         <View style={styles.headerOverlay} pointerEvents="box-none">
           <View style={styles.headerRow}>
             <Pressable onPress={onBack} style={styles.headerBack}>
@@ -328,14 +224,20 @@ export default function RoomWebView({
           <>
             <View style={styles.controlsOverlay} pointerEvents="box-none">
               <View style={styles.controlsRow}>
-                <Pressable onPress={handleSeekBack} style={styles.controlBtn}>
-                  <Typography variant="body" color="#fff">{"\u2039\u2039"}</Typography>
+                <Pressable onPress={() => seekRelative(-10)} style={styles.controlBtn}>
+                  <Typography variant="body" color="#fff">
+                    {"\u2039\u2039"}
+                  </Typography>
                 </Pressable>
                 <Pressable onPress={handlePlayPause} style={styles.controlBtn}>
-                  <Typography variant="subHeading" color="#fff">{isPlaying ? "||" : "\u25B6"}</Typography>
+                  <Typography variant="subHeading" color="#fff">
+                    {isPlaying ? "||" : "\u25B6"}
+                  </Typography>
                 </Pressable>
-                <Pressable onPress={handleSeekForward} style={styles.controlBtn}>
-                  <Typography variant="body" color="#fff">{"\u203A\u203A"}</Typography>
+                <Pressable onPress={() => seekRelative(10)} style={styles.controlBtn}>
+                  <Typography variant="body" color="#fff">
+                    {"\u203A\u203A"}
+                  </Typography>
                 </Pressable>
               </View>
             </View>
@@ -360,28 +262,20 @@ export default function RoomWebView({
   );
 }
 
-const styles = StyleSheet.create((theme, rt) => ({
-  container: {
-    flex: 1,
-    backgroundColor: theme.color.background,
-  },
-  webview: { flex: 1 },
-  controlsBar: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    zIndex: 10,
-    flexDirection: "row",
-    gap: 8,
-  },
-  playerFixed: {
+const styles = StyleSheet.create(() => ({
+  playerWrap: {
     width: "100%",
     height: PLAYER_HEIGHT,
+    backgroundColor: "#000",
   },
   videoContainer: {
     width: "100%",
     height: PLAYER_HEIGHT,
     backgroundColor: "#000",
+  },
+  playerFixed: {
+    width: "100%",
+    height: PLAYER_HEIGHT,
   },
   headerOverlay: {
     position: "absolute",
@@ -441,22 +335,24 @@ const styles = StyleSheet.create((theme, rt) => ({
     right: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
   },
   progressTrack: {
     flex: 1,
-    height: 4,
-    backgroundColor: "rgba(255,255,255,0.3)",
-    borderRadius: 2,
+    height: 6,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.25)",
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
     backgroundColor: "#E50914",
-    borderRadius: 2,
   },
   placeholder: {
-    justifyContent: "center",
+    width: "100%",
+    height: PLAYER_HEIGHT,
     alignItems: "center",
+    justifyContent: "center",
   },
 }));
+
