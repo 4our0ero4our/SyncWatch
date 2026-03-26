@@ -20,6 +20,15 @@ type YouTubeSearchResponse = {
   nextPageToken?: string;
 };
 
+type YouTubeDurationsResponse = {
+  items?: Array<{
+    id?: string;
+    contentDetails?: {
+      duration?: string; // ISO 8601 (e.g. PT1H2M10S)
+    };
+  }>;
+};
+
 async function youtubeFetch<T>(path: string, params: Record<string, string>): Promise<T> {
   const key = getYouTubeApiKey();
   if (!key) throw new Error("YouTube API key is not configured");
@@ -33,11 +42,48 @@ async function youtubeFetch<T>(path: string, params: Record<string, string>): Pr
   return res.json() as Promise<T>;
 }
 
+function parseISO8601DurationToSeconds(duration: string): number | null {
+  const match = duration.match(/^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  if (!match) return null;
+  const hours = match[1] ? parseInt(match[1], 10) : 0;
+  const minutes = match[2] ? parseInt(match[2], 10) : 0;
+  const seconds = match[3] ? parseInt(match[3], 10) : 0;
+  const total = hours * 3600 + minutes * 60 + seconds;
+  return Number.isFinite(total) ? total : null;
+}
+
+async function getVideoDurationsSeconds(videoIds: string[]): Promise<Record<string, number>> {
+  const unique = Array.from(new Set(videoIds)).filter(Boolean);
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += 50) chunks.push(unique.slice(i, i + 50));
+
+  const durationMap: Record<string, number> = {};
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      if (chunk.length === 0) return;
+      const data = await youtubeFetch<YouTubeDurationsResponse>("/videos", {
+        part: "contentDetails",
+        id: chunk.join(","),
+      });
+      for (const item of data.items ?? []) {
+        const id = item.id;
+        const iso = item.contentDetails?.duration;
+        if (!id || !iso) continue;
+        const seconds = parseISO8601DurationToSeconds(iso);
+        if (seconds == null) continue;
+        durationMap[id] = seconds;
+      }
+    })
+  );
+
+  return durationMap;
+}
+
 export async function searchYouTubeVideos(
   query: string,
-  options: { maxResults?: number; pageToken?: string } = {}
+  options: { maxResults?: number; pageToken?: string; excludeShorts?: boolean } = {}
 ): Promise<{ items: YouTubeSearchItem[]; nextPageToken?: string }> {
-  const { maxResults = 20, pageToken } = options;
+  const { maxResults = 20, pageToken, excludeShorts = true } = options;
   const q = (query || DEFAULT_HOMEPAGE_QUERY).trim() || DEFAULT_HOMEPAGE_QUERY;
   const data = await youtubeFetch<YouTubeSearchResponse>("/search", {
     part: "snippet",
@@ -61,6 +107,19 @@ export async function searchYouTubeVideos(
       thumbnailUri: thumb,
     });
   }
+
+  if (excludeShorts && items.length > 0) {
+    // "Shorts" isn't exposed as a direct flag from `/search`, so we filter by duration (<= 60s).
+    // This requires an extra `/videos` request for the returned IDs.
+    const durations = await getVideoDurationsSeconds(items.map((i) => i.videoId));
+    const filtered = items.filter((i) => {
+      const seconds = durations[i.videoId];
+      if (seconds == null) return true; // if duration missing, don't accidentally remove everything
+      return seconds > 60;
+    });
+    return { items: filtered, nextPageToken: data.nextPageToken };
+  }
+
   return { items, nextPageToken: data.nextPageToken };
 }
 
