@@ -109,13 +109,12 @@ export async function searchYouTubeVideos(
   }
 
   if (excludeShorts && items.length > 0) {
-    // "Shorts" isn't exposed as a direct flag from `/search`, so we filter by duration (<= 60s).
-    // This requires an extra `/videos` request for the returned IDs.
+    const MIN_DURATION_SECONDS = 5 * 60;
     const durations = await getVideoDurationsSeconds(items.map((i) => i.videoId));
     const filtered = items.filter((i) => {
       const seconds = durations[i.videoId];
       if (seconds == null) return true; // if duration missing, don't accidentally remove everything
-      return seconds > 60;
+      return seconds >= MIN_DURATION_SECONDS;
     });
     return { items: filtered, nextPageToken: data.nextPageToken };
   }
