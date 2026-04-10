@@ -21,6 +21,7 @@ const updateRoomSchema = Joi.object({
   progress: Joi.number().min(0),
   isPlaying: Joi.boolean(),
   isCompleted: Joi.boolean(),
+  hostSessionActive: Joi.boolean(),
 });
 
 export async function create(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -106,6 +107,7 @@ export async function update(req: AuthenticatedRequest, res: Response, next: Nex
       progress?: number;
       isPlaying?: boolean;
       isCompleted?: boolean;
+      hostSessionActive?: boolean;
     };
     const room = await updateRoom(roomId, body);
     if (!room) {

@@ -2,6 +2,7 @@ import { logger } from "../utils/logger";
 import { getFirestore } from "../config/firebase";
 import { ROOMS_COLLECTION, IRoom } from "../models/Room";
 import { PARTICIPANTS_SUBCOLLECTION, ParticipantRole } from "../models/Participant";
+import { removeAllViewersExceptHost } from "./participant.service";
 import admin from "firebase-admin";
 
 const INVITE_CODE_LENGTH = 6;
@@ -47,6 +48,7 @@ export type RoomResponse = {
   progress?: number;
   isPlaying?: boolean;
   isCompleted?: boolean;
+  hostSessionActive?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -86,6 +88,7 @@ export async function createRoom(
       progress: 0,
       isPlaying: false,
       isCompleted: false,
+      hostSessionActive: false,
       createdAt: now,
       updatedAt: now,
     };
@@ -118,6 +121,7 @@ export async function createRoom(
       progress: 0,
       isPlaying: false,
       isCompleted: false,
+      hostSessionActive: false,
       createdAt,
       updatedAt,
     };
@@ -147,6 +151,7 @@ export async function getRoomById(roomId: string): Promise<(RoomResponse & { vid
     progress: data.progress ?? 0,
     isPlaying: data.isPlaying ?? false,
     isCompleted: data.isCompleted ?? false,
+    hostSessionActive: data.hostSessionActive ?? false,
     createdAt,
     updatedAt,
   };
@@ -172,6 +177,7 @@ export async function getRoomsByHost(hostId: string): Promise<RoomResponse[]> {
       progress: data.progress ?? 0,
       isPlaying: data.isPlaying ?? false,
       isCompleted: data.isCompleted ?? false,
+      hostSessionActive: data.hostSessionActive ?? false,
       createdAt,
       updatedAt,
     };
@@ -203,6 +209,7 @@ export async function getRoomByInviteCode(inviteCode: string): Promise<RoomRespo
     progress: data.progress ?? 0,
     isPlaying: data.isPlaying ?? false,
     isCompleted: data.isCompleted ?? false,
+    hostSessionActive: data.hostSessionActive ?? false,
     createdAt,
     updatedAt,
   };
@@ -217,12 +224,16 @@ export async function updateRoom(
     progress?: number;
     isPlaying?: boolean;
     isCompleted?: boolean;
+    hostSessionActive?: boolean;
   }
 ): Promise<RoomResponse | null> {
   const db = getFirestore();
   const ref = db.collection(ROOMS_COLLECTION).doc(roomId);
   const snap = await ref.get();
   if (!snap.exists) return null;
+  const roomBefore = snap.data() as Partial<IRoom>;
+  const hostId = roomBefore.hostId ?? "";
+
   const cleanUpdates: Record<string, string | number | boolean> = {};
   if (updates.name != null) cleanUpdates.name = updates.name;
   if (updates.description != null) cleanUpdates.description = updates.description;
@@ -230,6 +241,7 @@ export async function updateRoom(
   if (updates.progress != null) cleanUpdates.progress = updates.progress;
   if (updates.isPlaying != null) cleanUpdates.isPlaying = updates.isPlaying;
   if (updates.isCompleted != null) cleanUpdates.isCompleted = updates.isCompleted;
+  if (updates.hostSessionActive != null) cleanUpdates.hostSessionActive = updates.hostSessionActive;
   await ref.set(
     {
       ...cleanUpdates,
@@ -237,6 +249,13 @@ export async function updateRoom(
     },
     { merge: true }
   );
+  if (updates.hostSessionActive === false && hostId) {
+    try {
+      await removeAllViewersExceptHost(roomId, hostId);
+    } catch (e) {
+      logger.warn("removeAllViewersExceptHost failed", { roomId, error: e });
+    }
+  }
   return getRoomById(roomId);
 }
 

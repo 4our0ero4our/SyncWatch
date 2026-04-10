@@ -4,6 +4,27 @@ import { PARTICIPANTS_SUBCOLLECTION, ParticipantRole } from "../models/Participa
 import admin from "firebase-admin";
 import { getUserProfile } from "./user.service";
 
+function forbidden(message: string): Error {
+  const err = new Error(message);
+  (err as Error & { statusCode?: number }).statusCode = 403;
+  return err;
+}
+
+export async function removeAllViewersExceptHost(roomId: string, hostId: string): Promise<void> {
+  const db = getFirestore();
+  const roomRef = db.collection(ROOMS_COLLECTION).doc(roomId);
+  const snaps = await roomRef.collection(PARTICIPANTS_SUBCOLLECTION).get();
+  const batch = db.batch();
+  let deletes = 0;
+  for (const d of snaps.docs) {
+    if (d.id !== hostId) {
+      batch.delete(d.ref);
+      deletes += 1;
+    }
+  }
+  if (deletes > 0) await batch.commit();
+}
+
 export async function joinRoom(
   roomId: string,
   userId: string
@@ -12,6 +33,17 @@ export async function joinRoom(
   const roomRef = db.collection(ROOMS_COLLECTION).doc(roomId);
   const roomSnap = await roomRef.get();
   if (!roomSnap.exists) return null;
+
+  const room = roomSnap.data() as Partial<IRoom>;
+  const hostId = room.hostId ?? "";
+  if (userId !== hostId) {
+    if (room.isCompleted === true) {
+      throw forbidden("This party has ended.");
+    }
+    if (room.hostSessionActive !== true) {
+      throw forbidden("The host is not in the watch room yet.");
+    }
+  }
 
   const participantRef = roomRef.collection(PARTICIPANTS_SUBCOLLECTION).doc(userId);
   const existingSnap = await participantRef.get();

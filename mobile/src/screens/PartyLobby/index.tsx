@@ -14,7 +14,7 @@ import { getRoom, type Room } from "@/src/services/rooms";
 const PartyLobbyScreen = () => {
   const router = useRouter();
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -34,6 +34,16 @@ const PartyLobbyScreen = () => {
       })
       .finally(() => setLoading(false));
   }, [roomId, token]);
+
+  useEffect(() => {
+    if (!roomId || !token || !room || user?.id === room.hostId) return;
+    const id = setInterval(() => {
+      getRoom(roomId, token)
+        .then(setRoom)
+        .catch(() => {});
+    }, 3000);
+    return () => clearInterval(id);
+  }, [roomId, token, user?.id, room?.hostId]);
 
   const handleGoToParty = () => {
     console.log("[PartyLobby] Go to Party pressed", roomId);
@@ -69,6 +79,9 @@ const PartyLobbyScreen = () => {
     : require("../../assets/images/image9.png");
 
   const isEnded = room.isCompleted === true;
+  const isHostUser = user?.id === room.hostId;
+  const hostLive = room.hostSessionActive === true;
+  const visitorCanEnter = isHostUser || hostLive;
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -103,7 +116,16 @@ const PartyLobbyScreen = () => {
         </View>
         {!isEnded && (
           <View style={styles.footer}>
-            <Button title="go-to-party" onPress={handleGoToParty}>
+            {!isHostUser && !hostLive && (
+              <Typography variant="smallBody" weight="medium" style={{ marginBottom: 8, textAlign: "center" }}>
+                Waiting for the host to open the watch room…
+              </Typography>
+            )}
+            <Button
+              title="go-to-party"
+              onPress={handleGoToParty}
+              disabled={!visitorCanEnter}
+            >
               Go to Party
             </Button>
           </View>

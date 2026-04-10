@@ -90,6 +90,22 @@ export default function RoomWebView({
   }, [initialProgress]);
 
   useEffect(() => {
+    if (isHost || !videoId || !playerRef.current) return;
+    const target = Math.floor(initialProgress ?? 0);
+    if (!Number.isFinite(target) || target < 0) return;
+    playerRef.current
+      .getCurrentTime()
+      .then((t) => {
+        if (Math.abs(t - target) > 2) {
+          playerRef.current?.seekTo(target, true);
+          setCurrentTime(target);
+          console.log("[RoomWebView] viewer sync seek from polled progress", { target });
+        }
+      })
+      .catch(() => {});
+  }, [initialProgress, isHost, videoId]);
+
+  useEffect(() => {
     if (!videoId) return;
     const id = setInterval(() => {
       playerRef.current?.getCurrentTime().then(setCurrentTime).catch(() => {});

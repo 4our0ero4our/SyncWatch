@@ -10,6 +10,7 @@ export interface IRoom {
   progress?: number;
   isPlaying?: boolean;
   isCompleted?: boolean;
+  hostSessionActive?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

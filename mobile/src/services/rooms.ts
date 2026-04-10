@@ -13,6 +13,7 @@ export type Room = {
   progress?: number;
   isPlaying?: boolean;
   isCompleted?: boolean;
+  hostSessionActive?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -67,7 +68,16 @@ export async function joinRoom(roomId: string, token: string): Promise<{ roomId:
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `Join room failed: ${res.status}`);
+    let message = text || `Join room failed: ${res.status}`;
+    try {
+      const parsed = JSON.parse(text) as { error?: string };
+      if (typeof parsed?.error === "string" && parsed.error.length > 0) {
+        message = parsed.error;
+      }
+    } catch {
+      // keep message as text
+    }
+    throw new Error(message);
   }
   return res.json() as Promise<{ roomId: string; userId: string; role: string }>;
 }
@@ -87,7 +97,7 @@ export async function getRoom(roomId: string, token: string): Promise<Room> {
 
 export async function updateRoomPlayback(
   roomId: string,
-  updates: { videoUrl?: string; progress?: number; isPlaying?: boolean; isCompleted?: boolean },
+  updates: { videoUrl?: string; progress?: number; isPlaying?: boolean; isCompleted?: boolean; hostSessionActive?: boolean },
   token: string
 ): Promise<Room> {
   const res = await fetch(`${API_BASE_URL}${ROOMS_PATH}/${roomId}`, {

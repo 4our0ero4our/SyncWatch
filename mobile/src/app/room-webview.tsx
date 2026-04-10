@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ActivityIndicator, View, StatusBar } from "react-native";
+import { ActivityIndicator, View, StatusBar, Alert } from "react-native";
 import StackHeader from "@/src/components/StackHeader";
 import RoomWebView from "@/src/components/RoomWebView";
 import RoomChat from "@/src/components/RoomChat";
@@ -22,8 +22,11 @@ export default function RoomWebViewScreen() {
   const [videoId, setVideoId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [hostSessionActive, setHostSessionActive] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isHostRef = useRef(false);
+  const viewerJoinedRef = useRef(false);
+  const sessionEndedRef = useRef(false);
 
   const setPlayingFromHost = useCallback((next: boolean) => {
     setIsPlaying(next);
@@ -40,6 +43,7 @@ export default function RoomWebViewScreen() {
       setVideoId(room.videoId ?? null);
       setIsPlaying(room.isPlaying ?? false);
       setProgress(room.progress ?? 0);
+      setHostSessionActive(room.hostSessionActive ?? false);
     } catch (e) {
       console.error("[RoomWebViewScreen] fetchRoom failed", e);
     }
@@ -50,10 +54,43 @@ export default function RoomWebViewScreen() {
       setLoading(false);
       return;
     }
-    fetchRoom()
-      .then(() => joinRoom(roomId, token).catch(() => {}))
-      .finally(() => setLoading(false));
-  }, [roomId, token, fetchRoom]);
+    let cancelled = false;
+    viewerJoinedRef.current = false;
+    sessionEndedRef.current = false;
+    (async () => {
+      try {
+        const room = await getRoom(roomId, token);
+        if (cancelled) return;
+        const host = room.hostId === user?.id;
+        setIsHost(host);
+        isHostRef.current = host;
+        setRoomName(room.name || "Watch Party");
+        setVideoId(room.videoId ?? null);
+        setIsPlaying(room.isPlaying ?? false);
+        setProgress(room.progress ?? 0);
+        setHostSessionActive(room.hostSessionActive ?? false);
+
+        if (host) {
+          await updateRoomPlayback(roomId, { hostSessionActive: true }, token);
+          if (!cancelled) setHostSessionActive(true);
+        }
+
+        await joinRoom(roomId, token);
+        if (!cancelled) viewerJoinedRef.current = true;
+      } catch (e: unknown) {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : "Could not join this party.";
+        console.error("[RoomWebViewScreen] init failed", e);
+        Alert.alert("Cannot join", msg, [{ text: "OK", onPress: () => router.back() }]);
+        return;
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId, token, user?.id, router]);
 
   useEffect(() => {
     if (!roomId || !token || loading) return;
@@ -67,10 +104,21 @@ export default function RoomWebViewScreen() {
   }, [roomId, token, loading, fetchRoom]);
 
   useEffect(() => {
+    if (loading || isHost) return;
+    if (!viewerJoinedRef.current) return;
+    if (hostSessionActive !== false) return;
+    if (sessionEndedRef.current) return;
+    sessionEndedRef.current = true;
+    Alert.alert("Session ended", "The host left the watch party.", [
+      { text: "OK", onPress: () => router.back() },
+    ]);
+  }, [loading, isHost, hostSessionActive, router]);
+
+  useEffect(() => {
     return () => {
       if (isHostRef.current && roomId && token) {
-        updateRoomPlayback(roomId, { isPlaying: false }, token).catch(() => {});
-        console.log("[RoomWebViewScreen] host left, set isPlaying=false");
+        updateRoomPlayback(roomId, { hostSessionActive: false, isPlaying: false }, token).catch(() => {});
+        console.log("[RoomWebViewScreen] host left, session closed for viewers");
       }
     };
   }, [roomId, token]);
@@ -78,7 +126,7 @@ export default function RoomWebViewScreen() {
   const handleEndParty = useCallback(async () => {
     if (!isHost || !roomId || !token) return;
     try {
-      await updateRoomPlayback(roomId, { isCompleted: true, isPlaying: false }, token);
+      await updateRoomPlayback(roomId, { isCompleted: true, isPlaying: false, hostSessionActive: false }, token);
       console.log("[RoomWebViewScreen] party ended by host");
       router.back();
     } catch (e) {
