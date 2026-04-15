@@ -1,5 +1,4 @@
 import { StyleSheet } from "react-native-unistyles";
-
 import React, { useState, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import StackHeader from "@/src/components/StackHeader";
@@ -80,7 +79,10 @@ const PartyLobbyScreen = () => {
 
   const isEnded = room.isCompleted === true;
   const isHostUser = user?.id === room.hostId;
-  const hostLive = room.hostSessionActive === true;
+  const hostLive =
+    room.hostSessionActive === true ||
+    room.isPlaying === true ||
+    (typeof room.progress === "number" && room.progress > 0);
   const visitorCanEnter = isHostUser || hostLive;
 
   return (
