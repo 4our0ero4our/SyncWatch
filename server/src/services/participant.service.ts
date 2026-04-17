@@ -3,6 +3,7 @@ import { ROOMS_COLLECTION, IRoom } from "../models/Room";
 import { PARTICIPANTS_SUBCOLLECTION, ParticipantRole } from "../models/Participant";
 import admin from "firebase-admin";
 import { getUserProfile } from "./user.service";
+import { leaveWaitingRoom } from "./waiting.service";
 
 function forbidden(message: string): Error {
   const err = new Error(message);
@@ -49,6 +50,7 @@ export async function joinRoom(
   const existingSnap = await participantRef.get();
   if (existingSnap.exists) {
     const existing = existingSnap.data() as { role?: ParticipantRole };
+    await leaveWaitingRoom(roomId, userId).catch(() => {});
     return { roomId, userId, role: existing.role ?? "viewer" };
   }
 
@@ -63,6 +65,7 @@ export async function joinRoom(
     },
     { merge: false }
   );
+  await leaveWaitingRoom(roomId, userId).catch(() => {});
   return { roomId, userId, role: "viewer" };
 }
 

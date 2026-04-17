@@ -17,6 +17,13 @@ import { avatars } from "@/src/utils/dummyData";
 
 const REACTIONS = ["👍", "😂", "❤️", "😮", "😢", "🔥"];
 
+function formatMessageTime(createdAt?: string): string {
+  if (!createdAt) return "";
+  const d = new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
 function getAvatarSource(avatarKey?: string) {
   const id = avatarKey ? parseInt(avatarKey, 10) : NaN;
   const fallback = avatars[0]?.url;
@@ -36,6 +43,7 @@ export default function RoomChat({ roomId, token }: RoomChatProps) {
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showReactions, setShowReactions] = useState(false);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -83,6 +91,7 @@ export default function RoomChat({ roomId, token }: RoomChatProps) {
     try {
       const msg = await sendMessage(roomId, token, "reaction", emoji);
       setMessages((prev) => [...prev, msg]);
+      setShowReactions(false);
     } catch (e) {
       console.error("[RoomChat] send reaction error", e);
     }
@@ -91,22 +100,27 @@ export default function RoomChat({ roomId, token }: RoomChatProps) {
   const renderItem = ({ item }: { item: ChatMessage }) => {
     const displayName = item.displayName ?? item.userId.slice(0, 12) + (item.userId.length > 12 ? "…" : "");
     const avatarSource = getAvatarSource(item.avatar);
+    const msgTime = formatMessageTime(item.createdAt);
     return (
       <View style={styles.messageRow}>
         <Image source={avatarSource} style={styles.messageAvatar} />
         <View style={styles.messageBubble}>
+          <View style={styles.messageMetaRow}>
+            <Typography variant="smallBody" weight="medium">
+              {displayName}
+            </Typography>
+            {!!msgTime && (
+              <Typography variant="caption" weight="regular" color={theme.color.textMuted}>
+                {msgTime}
+              </Typography>
+            )}
+          </View>
           {item.type === "text" ? (
-            <Typography variant="smallBody" weight="regular">
-              <Typography variant="caption" weight="medium" color={theme.color.textMuted}>
-                {displayName}
-              </Typography>{" "}
+            <Typography variant="smallBody" weight="regular" style={styles.messageText}>
               {item.content}
             </Typography>
           ) : (
-            <Typography variant="smallBody" weight="medium">
-              <Typography variant="caption" weight="medium" color={theme.color.textMuted}>
-                {displayName}
-              </Typography>{" "}
+            <Typography variant="smallBody" weight="medium" style={styles.messageText}>
               reacted {item.content}
             </Typography>
           )}
@@ -163,18 +177,20 @@ export default function RoomChat({ roomId, token }: RoomChatProps) {
           )
         }
       />
-      <View style={[styles.reactions, { backgroundColor: theme.color.backgroundLight }]}>
-        {REACTIONS.map((emoji) => (
-          <Pressable
-            key={emoji}
-            style={[styles.reactionBtn, { backgroundColor: theme.color.background }]}
-            onPress={() => handleSendReaction(emoji)}
-          >
-            <Typography variant="body">{emoji}</Typography>
-          </Pressable>
-        ))}
-      </View>
       <View style={[styles.inputRow, { backgroundColor: theme.color.background }]}>
+        {showReactions && (
+          <View style={styles.reactionPicker}>
+            {REACTIONS.map((emoji) => (
+              <Pressable
+                key={emoji}
+                style={styles.reactionOption}
+                onPress={() => handleSendReaction(emoji)}
+              >
+                <Typography variant="body">{emoji}</Typography>
+              </Pressable>
+            ))}
+          </View>
+        )}
         <TextInput
           style={[styles.input, { color: theme.color.white }]}
           placeholder="Send a message"
@@ -185,11 +201,17 @@ export default function RoomChat({ roomId, token }: RoomChatProps) {
           returnKeyType="send"
         />
         <Pressable
-          style={[styles.sendBtn, { backgroundColor: theme.color.primary }]}
+          style={styles.iconBtn}
+          onPress={() => setShowReactions((prev) => !prev)}
+        >
+          <Typography variant="body" color="#9CA3AF">☺</Typography>
+        </Pressable>
+        <Pressable
+          style={[styles.sendBtn, { backgroundColor: "#2A2D36" }]}
           onPress={handleSendText}
         >
           <Typography variant="smallBody" weight="bold" color={theme.color.white}>
-            Send
+            ➤
           </Typography>
         </Pressable>
       </View>
@@ -259,33 +281,64 @@ const styles = StyleSheet.create({
   messageBubble: {
     flex: 1,
   },
-  reactions: {
+  messageMetaRow: {
     flexDirection: "row",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    alignItems: "center",
     gap: 8,
   },
-  reactionBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+  messageText: {
+    marginTop: 2,
   },
   inputRow: {
     flexDirection: "row",
-    padding: 12,
-    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 6,
     alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.06)",
+    position: "relative",
+  },
+  reactionPicker: {
+    position: "absolute",
+    bottom: 52,
+    right: 54,
+    flexDirection: "row",
+    backgroundColor: "#111216",
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  reactionOption: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 2,
   },
   input: {
     flex: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 999,
     fontSize: 14,
+    backgroundColor: "#15171E",
   },
   sendBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

@@ -111,7 +111,13 @@ export default function PartiesScreen() {
   const handleJoinWithCode = async () => {
     const code = joinCode.trim();
     if (!code || !token) {
-      console.log("[Parties] handleJoinWithCode: no code or token");
+      console.log("[Parties] handleJoinWithCode: no code or token", {
+        hasCode: code.length > 0,
+        hasToken: !!token,
+      });
+      if (!token) {
+        Alert.alert("Session expired", "Please sign in again to join a party.");
+      }
       return;
     }
     console.log("[Parties] handleJoinWithCode: looking up", code);

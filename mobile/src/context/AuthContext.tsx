@@ -2,9 +2,11 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type StreamingProvider = "netflix" | "prime";
 
@@ -32,6 +34,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [storedToken, storedUser] = await Promise.all([
+          AsyncStorage.getItem("authToken"),
+          AsyncStorage.getItem("user"),
+        ]);
+        if (cancelled) return;
+        if (storedToken) setToken(storedToken);
+        if (storedUser) {
+          try {
+            const parsed = JSON.parse(storedUser) as AuthUser;
+            setUser(parsed);
+          } catch {
+            
+          }
+        }
+      } catch (e) {
+        console.warn("[AuthContext] failed to hydrate auth state", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const login = useCallback((payload: { user: AuthUser; token: string }) => {
     console.log("[AuthContext] login called with:", payload);

@@ -8,14 +8,31 @@ import ClipboardCopy from "@/src/components/clipBoard/index";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import Button from "@/src/components/common/Button";
 import { useAuth } from "@/src/context/AuthContext";
-import { getRoom, type Room } from "@/src/services/rooms";
+import {
+  getRoom,
+  getWaitingUsers,
+  joinWaitingRoom,
+  leaveWaitingRoom,
+  type Room,
+  type WaitingUser,
+} from "@/src/services/rooms";
+import { avatars } from "@/src/utils/dummyData";
 
 const PartyLobbyScreen = () => {
   const router = useRouter();
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
   const { token, user } = useAuth();
   const [room, setRoom] = useState<Room | null>(null);
+  const [waitingUsers, setWaitingUsers] = useState<WaitingUser[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const getAvatarSource = (avatarKey?: string) => {
+    const id = avatarKey ? parseInt(avatarKey, 10) : NaN;
+    const fallback = avatars[0]?.url;
+    if (Number.isNaN(id)) return fallback;
+    const found = avatars.find((a) => a.id === id);
+    return found?.url ?? fallback;
+  };
 
   useEffect(() => {
     if (!roomId || !token) {
@@ -35,14 +52,39 @@ const PartyLobbyScreen = () => {
   }, [roomId, token]);
 
   useEffect(() => {
-    if (!roomId || !token || !room || user?.id === room.hostId) return;
+    if (!roomId || !token || !room) return;
     const id = setInterval(() => {
       getRoom(roomId, token)
         .then(setRoom)
         .catch(() => {});
+      getWaitingUsers(roomId, token)
+        .then(setWaitingUsers)
+        .catch(() => {});
     }, 3000);
     return () => clearInterval(id);
-  }, [roomId, token, user?.id, room?.hostId]);
+  }, [roomId, token, room]);
+
+  useEffect(() => {
+    if (!roomId || !token || !room) return;
+    const isHost = user?.id === room.hostId;
+    const isEnded = room.isCompleted === true;
+    const hostLive = room.hostSessionActive === true;
+
+    if (isHost || isEnded || hostLive) {
+      leaveWaitingRoom(roomId, token).catch(() => {});
+      return;
+    }
+
+    joinWaitingRoom(roomId, token).catch(() => {});
+    const heartbeat = setInterval(() => {
+      joinWaitingRoom(roomId, token).catch(() => {});
+    }, 10000);
+
+    return () => {
+      clearInterval(heartbeat);
+      leaveWaitingRoom(roomId, token).catch(() => {});
+    };
+  }, [roomId, token, room?.hostId, room?.isCompleted, room?.hostSessionActive, user?.id]);
 
   const handleGoToParty = () => {
     console.log("[PartyLobby] Go to Party pressed", roomId);
@@ -79,11 +121,11 @@ const PartyLobbyScreen = () => {
 
   const isEnded = room.isCompleted === true;
   const isHostUser = user?.id === room.hostId;
-  const hostLive =
-    room.hostSessionActive === true ||
-    room.isPlaying === true ||
-    (typeof room.progress === "number" && room.progress > 0);
+  const hostLive = room.hostSessionActive === true;
   const visitorCanEnter = isHostUser || hostLive;
+  const waitingUsersExcludingSelf = waitingUsers.filter((w) => w.userId !== user?.id);
+  const visibleWaiting = waitingUsersExcludingSelf.slice(0, 4);
+  const waitingExtra = waitingUsersExcludingSelf.length - visibleWaiting.length;
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -118,6 +160,27 @@ const PartyLobbyScreen = () => {
         </View>
         {!isEnded && (
           <View style={styles.footer}>
+            {visibleWaiting.length > 0 && (
+              <View style={styles.waitingRow}>
+                <View style={styles.waitingAvatars}>
+                  {visibleWaiting.map((w, idx) => (
+                    <View key={w.userId} style={[styles.waitingAvatarWrap, { marginLeft: idx === 0 ? 0 : -10 }]}>
+                      <Image source={getAvatarSource(w.avatar)} style={styles.waitingAvatar} />
+                    </View>
+                  ))}
+                  {waitingExtra > 0 && (
+                    <View style={[styles.waitingAvatarWrap, styles.waitingExtraBadge, { marginLeft: -10 }]}>
+                      <Typography variant="caption" weight="bold" color="#fff">
+                        +{waitingExtra}
+                      </Typography>
+                    </View>
+                  )}
+                </View>
+                <Typography variant="smallBody" weight="medium">
+                  are waiting...
+                </Typography>
+              </View>
+            )}
             {!isHostUser && !hostLive && (
               <Typography variant="smallBody" weight="medium" style={{ marginBottom: 8, textAlign: "center" }}>
                 Waiting for the host to open the watch room…
@@ -198,5 +261,34 @@ const styles = StyleSheet.create((theme) => ({
   footer: {
     width:"100%",
     marginBottom:theme.spacing.l
+  },
+  waitingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 120,
+  },
+  waitingAvatars: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 6,
+  },
+  waitingAvatarWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: "#0B0B0F",
+    backgroundColor: "#1B1E28",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  waitingAvatar: {
+    width: "100%",
+    height: "100%",
+  },
+  waitingExtraBadge: {
+    backgroundColor: "#0E9BFF",
   },
 }));

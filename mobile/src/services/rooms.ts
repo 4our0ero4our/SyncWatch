@@ -151,6 +151,12 @@ export type RoomParticipant = {
   avatar?: string;
 };
 
+export type WaitingUser = {
+  userId: string;
+  displayName?: string;
+  avatar?: string;
+};
+
 export async function getParticipants(roomId: string, token: string): Promise<RoomParticipant[]> {
   const res = await fetch(`${API_BASE_URL}${ROOMS_PATH}/${roomId}/participants`, {
     method: "GET",
@@ -162,4 +168,40 @@ export async function getParticipants(roomId: string, token: string): Promise<Ro
   }
   const data = (await res.json()) as { participants: RoomParticipant[] };
   return data.participants ?? [];
+}
+
+export async function joinWaitingRoom(roomId: string, token: string): Promise<WaitingUser> {
+  const res = await fetch(`${API_BASE_URL}${ROOMS_PATH}/${roomId}/waiting/join`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Join waiting room failed: ${res.status}`);
+  }
+  return res.json() as Promise<WaitingUser>;
+}
+
+export async function leaveWaitingRoom(roomId: string, token: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${ROOMS_PATH}/${roomId}/waiting/leave`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Leave waiting room failed: ${res.status}`);
+  }
+}
+
+export async function getWaitingUsers(roomId: string, token: string): Promise<WaitingUser[]> {
+  const res = await fetch(`${API_BASE_URL}${ROOMS_PATH}/${roomId}/waiting`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Get waiting users failed: ${res.status}`);
+  }
+  const data = (await res.json()) as { waitingUsers: WaitingUser[] };
+  return data.waitingUsers ?? [];
 }

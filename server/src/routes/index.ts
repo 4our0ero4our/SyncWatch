@@ -5,6 +5,7 @@ import roomRoutes from "./room.routes";
 import participantRoutes from "./participant.routes";
 import syncRoutes from "./sync.routes";
 import chatRoutes from "./chat.routes";
+import waitingRoutes from "./waiting.routes";
 import { health } from "../controllers/health.controller";
 
 const router = Router();
@@ -18,5 +19,6 @@ router.use("/rooms", roomRoutes);
 router.use("/rooms/:roomId/participants", participantRoutes);
 router.use("/rooms/:roomId/sync", syncRoutes);
 router.use("/rooms/:roomId/messages", chatRoutes);
+router.use("/rooms/:roomId/waiting", waitingRoutes);
 
 export default router;
