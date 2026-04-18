@@ -27,6 +27,8 @@ type RoomWebViewProps = {
   isPlaying: boolean;
   initialProgress?: number;
   roomName: string;
+  /** Viewer-only: dim overlay so the YouTube area stays non-interactive and matches host pause/away. */
+  viewerPlaybackHold?: "away" | "paused" | null;
   onBack: () => void;
   onEndParty?: () => void;
   onPlayStateChange?: (isPlaying: boolean) => void;
@@ -40,6 +42,7 @@ export default function RoomWebView({
   isPlaying,
   initialProgress = 0,
   roomName,
+  viewerPlaybackHold = null,
   onBack,
   onEndParty,
   onPlayStateChange,
@@ -213,8 +216,22 @@ export default function RoomWebView({
             start: Math.floor(initialProgress),
           }}
           webViewStyle={[styles.playerFixed, { backgroundColor: "#000" }]}
-          webViewProps={{ style: { backgroundColor: "#000" } }}
+          webViewProps={{
+            style: { backgroundColor: "#000" },
+            // YouTube WebView may still show a center play affordance when paused; block taps so viewers follow host only.
+            pointerEvents: isHost ? "auto" : "none",
+          }}
         />
+
+        {viewerPlaybackHold ? (
+          <View style={styles.viewerHoldOverlay} pointerEvents="auto">
+            <Typography variant="smallBody" weight="medium" color="#fff" align="center" style={styles.viewerHoldText}>
+              {viewerPlaybackHold === "away"
+                ? "The host stepped away. Playback is paused until they return."
+                : "The host paused playback."}
+            </Typography>
+          </View>
+        ) : null}
 
         <View style={styles.headerOverlay} pointerEvents="box-none">
           <View style={styles.headerRow}>
@@ -293,11 +310,27 @@ const styles = StyleSheet.create(() => ({
     width: "100%",
     height: PLAYER_HEIGHT,
   },
+  viewerHoldOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    zIndex: 5,
+  },
+  viewerHoldText: {
+    maxWidth: 280,
+  },
   headerOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
+    zIndex: 20,
     paddingTop: 8,
     paddingBottom: 8,
     paddingHorizontal: 12,

@@ -7,7 +7,7 @@ import { validateBody } from "../middlewares/validateBody";
 
 const createRoomSchema = Joi.object({
   name: Joi.string().trim().min(1).max(200).required(),
-  description: Joi.string().trim().max(500).allow(""),
+  description: Joi.string().trim().min(1).max(500).required(),
   movieTitle: Joi.string().trim().max(300).allow(""),
   movieImageUrl: Joi.string().uri().allow(""),
   videoUrl: Joi.string().trim().max(2000).allow(""),
@@ -16,7 +16,7 @@ const createRoomSchema = Joi.object({
 
 const updateRoomSchema = Joi.object({
   name: Joi.string().trim().min(1).max(200),
-  description: Joi.string().trim().max(500).allow(""),
+  description: Joi.string().trim().min(1).max(500),
   videoUrl: Joi.string().trim().min(1).max(2000).allow(""),
   progress: Joi.number().min(0),
   isPlaying: Joi.boolean(),
@@ -29,7 +29,7 @@ export async function create(req: AuthenticatedRequest, res: Response, next: Nex
     const userId = req.userId!;
     const { name, description, movieTitle, movieImageUrl, videoUrl, videoId } = req.body as {
       name: string;
-      description?: string;
+      description: string;
       movieTitle?: string;
       movieImageUrl?: string;
       videoUrl?: string;
@@ -38,7 +38,7 @@ export async function create(req: AuthenticatedRequest, res: Response, next: Nex
     const room = await createRoom(
       {
         name,
-        description: description?.trim() || undefined,
+        description: description.trim(),
         movieTitle: movieTitle?.trim() || undefined,
         movieImageUrl: movieImageUrl?.trim() || undefined,
         videoUrl: videoUrl?.trim() || undefined,

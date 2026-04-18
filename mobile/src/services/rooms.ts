@@ -20,7 +20,7 @@ export type Room = {
 
 export type CreateRoomPayload = {
   name: string;
-  description?: string;
+  description: string;
   movieTitle?: string;
   movieImageUrl?: string;
   videoUrl?: string;

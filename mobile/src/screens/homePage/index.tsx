@@ -146,7 +146,7 @@ function Home() {
     const room = await createRoom(
       {
         name,
-        description: description || undefined,
+        description: description.trim(),
         movieTitle: selectedMovie?.title,
         movieImageUrl: getMovieImageUrl(selectedMovie),
         videoId: videoId || undefined,

@@ -20,9 +20,14 @@ export const Form = ({
 
   const handleGenerateInvite = async () => {
     const name = partyName.trim();
-    console.log("[Form] handleGenerateInvite", { name, description: partyDescription });
+    const desc = partyDescription.trim();
+    console.log("[Form] handleGenerateInvite", { name, description: desc });
     if (!name) {
       setError("Please enter a party name.");
+      return;
+    }
+    if (!desc) {
+      setError("Please enter a party description.");
       return;
     }
     if (!onCreateRoom) {
@@ -32,7 +37,7 @@ export const Form = ({
     setError(null);
     setLoading(true);
     try {
-      await onCreateRoom(name, partyDescription.trim());
+      await onCreateRoom(name, desc);
       console.log("[Form] handleGenerateInvite: success");
     } catch (e: any) {
       setError(e?.message ?? "Failed to create party. Please try again.");
@@ -76,7 +81,7 @@ export const Form = ({
         />
         <Input
           placeholder="Describe your watch party"
-          label="Enter a description (optional)"
+          label="Enter a description"
           value={partyDescription}
           onChangeText={setPartyDescription}
           editable={!loading}
@@ -89,7 +94,7 @@ export const Form = ({
           <Button
             onPress={handleGenerateInvite}
             title="generate invite"
-            disabled={loading}
+            disabled={loading || !partyName.trim() || !partyDescription.trim()}
           >
             {loading ? "Creating..." : "Generate invite"}
           </Button>

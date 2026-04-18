@@ -28,7 +28,7 @@ function toIsoDate(value: unknown): string {
 
 export type CreateRoomInput = {
   name: string;
-  description?: string;
+  description: string;
   movieTitle?: string;
   movieImageUrl?: string;
   videoUrl?: string;
@@ -80,7 +80,7 @@ export async function createRoom(
       name: input.name,
       hostId,
       inviteCode,
-      description: input.description ?? null,
+      description: input.description,
       movieTitle: input.movieTitle ?? null,
       movieImageUrl: input.movieImageUrl ?? null,
       videoUrl: input.videoUrl ?? null,
@@ -249,7 +249,7 @@ export async function updateRoom(
     },
     { merge: true }
   );
-  if (updates.hostSessionActive === false && hostId) {
+  if (updates.isCompleted === true && hostId) {
     try {
       await removeAllViewersExceptHost(roomId, hostId);
     } catch (e) {
