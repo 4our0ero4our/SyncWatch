@@ -16,21 +16,21 @@ export default function TabLayout() {
         <Label>Home</Label>
         <Icon
           sf={{ default: "house", selected: "house.fill" }}
-          drawable="custom_android_drawable"
+          drawable="ic_tab_home"
         />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="parties">
         <Label>Parties</Label>
         <Icon
           sf={{ default: "person.2", selected: "person.2.fill" }}
-          drawable="custom_settings_drawable"
+          drawable="ic_tab_parties"
         />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Label>Settings</Label>
         <Icon
           sf={{ default: "gearshape", selected: "gearshape.fill" }}
-          drawable="custom_settings_drawable"
+          drawable="ic_tab_settings"
         />
       </NativeTabs.Trigger>
     </NativeTabs>
